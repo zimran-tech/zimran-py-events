@@ -43,7 +43,7 @@ dev = [
 [project.urls]
 homepage = "https://github.com/zimran-tech/zimran-py-events"
 repository = "https://github.com/zimran-tech/zimran-py-events.git"
-bug tracker = "https://github.com/zimran-tech/zimran-py-events/issues"
+bugtracker = "https://github.com/zimran-tech/zimran-py-events/issues"
 changelog = "https://github.com/zimran-tech/zimran-py-events/releases"
 
 [tool.setuptools_scm]
