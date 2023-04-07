@@ -14,10 +14,13 @@ pip install zimran-events
 
 ```python
 
-from zimran.events import Producer
+from zimran.events import AsyncProducer
 
-producer = Producer(broker_url='')
-producer.publish('some.event.routing', {'msg': 'hello, world'})
+producer = AsyncProducer(broker_url='')
+await producer.connect()
+
+# message publishing
+await producer.publish('some.event.routing', {'msg': 'hello, world'})
 ```
 
 **Consumer**
@@ -25,16 +28,24 @@ producer.publish('some.event.routing', {'msg': 'hello, world'})
 ```python
 
 from zimran.events import Consumer
+from zimran.events.schemas import ExchangeScheme
 
 consumer = Consumer(service_name='my-service', broker_url='')
-consumer.add_event_handler('routing-key', handler_func)
+consumer.add_event_handler(
+            name='routing-key',
+            handler=handler_func,
+            exchange=ExchangeScheme(
+                name='exchange-name',
+                type='exchange-type',
+                durable=True,
+            )
+           )
 
 # or
 
 from zimran.events import Consumer
 
 consumer = Consumer(service_name='my-service', broker_url='')
-consumer.add_event_handler('routing-key', handler_func)
 
 @consumer.event_handler('routing-key')
 def handler_func(**kwargs):
