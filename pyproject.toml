@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=67.4.0", "wheel"]
+requires = ["setuptools>=67.4.0", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -43,6 +43,11 @@ dev = [
 [project.urls]
 homepage = "https://github.com/zimran-tech/zimran-py-events"
 repository = "https://github.com/zimran-tech/zimran-py-events.git"
+bug tracker = "https://github.com/zimran-tech/zimran-py-events/issues"
+changelog = "https://github.com/zimran-tech/zimran-py-events/releases"
+
+[tool.setuptools_scm]
+
 
 [tool.black]
 line-length=120
