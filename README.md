@@ -1,6 +1,6 @@
 ## zimran-contrib
 
-The `zimran-py-events` module provides reusable core parts of code
+The `zimran-py-events` module provides AMQP interface
 
 ## Installation
 
