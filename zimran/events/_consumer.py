@@ -4,6 +4,7 @@ import aio_pika
 import pika
 from pika.channel import Channel
 
+from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
 from zimran.events.schemas import ExchangeScheme, QueueScheme
 
 from ._abstracts import AbstractConsumer
@@ -28,6 +29,8 @@ class AsyncConsumer(AbstractConsumer):
         connection = await aio_pika.connect(self.url)
         async with connection:
             self._channel: aio_pika.Channel = await connection.channel(channel_number=self._channel_number)
+            await self._declare_unroutable_queue(channel=self._channel)
+
             await self._channel.set_qos(prefetch_count=self._prefetch_count)
 
             consumers = []
@@ -49,6 +52,11 @@ class AsyncConsumer(AbstractConsumer):
 
             print(f'[x] Registered {len(consumers)} consumers of {self.__class__.__name__}: {consumers}')
             await asyncio.Future()
+
+    async def _declare_unroutable_queue(self, channel: aio_pika.abc.AbstractChannel):
+        exchange = await channel.declare_exchange(UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
+        queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True)
+        await queue.bind(exchange=exchange, routing_key='')
 
 
 class Consumer(AbstractConsumer):
@@ -98,3 +106,8 @@ class Consumer(AbstractConsumer):
             ),
         )
         self._channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=routing_key)
+
+    def _declare_unroutable_queue(self):
+        self._channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
+        self._channel.queue_declare(UNROUTABLE_QUEUE_NAME, durable=True)
+        self._channel.queue_bind(UNROUTABLE_QUEUE_NAME, UNROUTABLE_EXCHANGE_NAME, '')
