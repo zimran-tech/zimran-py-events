@@ -77,6 +77,8 @@ class Consumer(AbstractConsumer):
             self._channel: Channel = connection.channel(channel_number=self._channel_number)
             self._channel.basic_qos(prefetch_count=self._prefetch_count)
 
+            self._declare_unroutable_queue()
+
             consumers = []
             for event_name, data in self._event_handlers.items():
                 queue_: QueueScheme = data['queue']
