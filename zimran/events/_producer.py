@@ -6,7 +6,7 @@ import pika
 
 from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
 from zimran.events.mixins import EventMixin
-from zimran.events.schemas import ContextScheme, ExchangeScheme
+from zimran.events.schemas import ContextScheme
 
 from ._abstracts import AbstractProducer
 
