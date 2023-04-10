@@ -67,6 +67,7 @@ class AsyncProducer(EventMixin, AbstractProducer):
             return
 
         self._validate_exchange(context.exchange)
+        await self._declare_unroutable_queue(channel)
 
         exchange_args = {**context.exchange.arguments, 'alternate-exchange': UNROUTABLE_EXCHANGE_NAME}
         exchange = await channel.declare_exchange(
@@ -85,7 +86,7 @@ class AsyncProducer(EventMixin, AbstractProducer):
             correlation_id=context.correlation_id,
         )
 
-    async def _declare_unroutable_exchange(self, channel: aio_pika.abc.AbstractChannel):
+    async def _declare_unroutable_queue(self, channel: aio_pika.abc.AbstractChannel):
         exchange = await channel.declare_exchange(UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
         queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True)
         await queue.bind(exchange=exchange, routing_key='')
