@@ -69,11 +69,7 @@ class AsyncProducer(EventMixin, AbstractProducer):
         self._validate_exchange(context.exchange)
         await self._declare_unroutable_queue(channel)
 
-        exchange_args = {**context.exchange.arguments, 'alternate-exchange': UNROUTABLE_EXCHANGE_NAME}
-        exchange = await channel.declare_exchange(
-            **context.exchange.as_dict(exclude_none=True, exclude=['arguments']),
-            arguments=exchange_args,
-        )
+        exchange = await channel.declare_exchange(**context.exchange.as_dict(exclude_none=True))
 
         await exchange.publish(message=message, routing_key=routing_key)
 
@@ -146,13 +142,10 @@ class Producer(EventMixin, AbstractProducer):
         self._declare_unroutable_queue()
 
         self._validate_exchange(context.exchange)
-
-        exchange_args = {**context.exchange, 'alternate-exchange': UNROUTABLE_EXCHANGE_NAME}
         self.channel.exchange_declare(
             exchange=context.exchange.name,
             exchange_type=context.exchange.type,
-            arguments=exchange_args,
-            **context.exchange.as_dict(exclude=['name', 'type', 'timeout', 'arguments'], exclude_none=True),
+            **context.exchange.as_dict(exclude=['name', 'type', 'timeout'], exclude_none=True),
         )
 
         self.channel.basic_publish(exchange=context.exchange.name, routing_key=routing_key, body=body)

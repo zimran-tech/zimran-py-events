@@ -1,6 +1,8 @@
 import uuid
 from dataclasses import asdict, dataclass
 
+from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME
+
 
 @dataclass(kw_only=True)
 class QueueBaseScheme:
@@ -30,6 +32,12 @@ class ExchangeScheme(QueueBaseScheme):
     durable: bool = True
     type: str = 'direct'
     internal: bool = False
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        if isinstance(self.arguments, dict):
+            self.arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
 
 @dataclass(kw_only=True)
