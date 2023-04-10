@@ -38,7 +38,7 @@ class QueueScheme(QueueBaseScheme):
     exclusive: bool = False
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ContextScheme:
     correlation_id: str | None = None
     queue: QueueScheme | None = None
