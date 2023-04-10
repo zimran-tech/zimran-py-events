@@ -4,8 +4,9 @@ import json
 import aio_pika
 import pika
 
+from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
 from zimran.events.mixins import EventMixin
-from zimran.events.schemas import ContextScheme
+from zimran.events.schemas import ContextScheme, ExchangeScheme
 
 from ._abstracts import AbstractProducer
 
@@ -66,7 +67,12 @@ class AsyncProducer(EventMixin, AbstractProducer):
             return
 
         self._validate_exchange(context.exchange)
-        exchange = await channel.declare_exchange(**context.exchange.as_dict(exclude_none=True))
+
+        exchange_args = {**context.exchange.arguments, 'alternate-exchange': UNROUTABLE_EXCHANGE_NAME}
+        exchange = await channel.declare_exchange(
+            **context.exchange.as_dict(exclude_none=True, exclude=['arguments']),
+            arguments=exchange_args,
+        )
 
         await exchange.publish(message=message, routing_key=routing_key)
 
@@ -78,6 +84,11 @@ class AsyncProducer(EventMixin, AbstractProducer):
             content_type='application/json',
             correlation_id=context.correlation_id,
         )
+
+    async def _declare_unroutable_exchange(self, channel: aio_pika.abc.AbstractChannel):
+        exchange = await channel.declare_exchange(UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
+        queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True)
+        await queue.bind(exchange=exchange, routing_key='')
 
 
 class Producer(EventMixin, AbstractProducer):
@@ -131,11 +142,21 @@ class Producer(EventMixin, AbstractProducer):
             self.channel.basic_publish(exchange='', routing_key=routing_key, body=body)
             return
 
+        self._declare_unroutable_queue()
+
         self._validate_exchange(context.exchange)
+
+        exchange_args = {**context.exchange, 'alternate-exchange': UNROUTABLE_EXCHANGE_NAME}
         self.channel.exchange_declare(
             exchange=context.exchange.name,
             exchange_type=context.exchange.type,
-            **context.exchange.as_dict(exclude=['name', 'type', 'timeout'], exclude_none=True),
+            arguments=exchange_args,
+            **context.exchange.as_dict(exclude=['name', 'type', 'timeout', 'arguments'], exclude_none=True),
         )
 
         self.channel.basic_publish(exchange=context.exchange.name, routing_key=routing_key, body=body)
+
+    def _declare_unroutable_queue(self):
+        self.channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
+        self.channel.queue_declare(UNROUTABLE_QUEUE_NAME, durable=True)
+        self.channel.queue_bind(UNROUTABLE_QUEUE_NAME, UNROUTABLE_EXCHANGE_NAME, '')
