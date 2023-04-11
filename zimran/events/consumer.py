@@ -1,7 +1,15 @@
 import asyncio
 
 import aio_pika
-from loguru import logger
+
+
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+
+    logger = logging.getLogger(__name__)
+
 
 from zimran.events.connection import AsyncConnection, Connection
 from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME

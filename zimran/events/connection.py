@@ -2,7 +2,14 @@ import asyncio
 
 import aio_pika
 import pika
-from loguru import logger
+
+
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+
+    logger = logging.getLogger(__name__)
 
 
 class Connection:
