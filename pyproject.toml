@@ -13,7 +13,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 
-dependencies = ["aio-pika", "pika"]
+dependencies = ["aio-pika", "pika", "loguru"]
 
 classifiers = [
   "Development Status :: 3 - Alpha",

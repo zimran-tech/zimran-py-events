@@ -1,5 +1,5 @@
-from ._consumer import AsyncConsumer, Consumer
-from ._producer import AsyncProducer, Producer
+from .consumer import AsyncConsumer, Consumer
+from .producer import AsyncProducer, Producer
 
 
 __all__ = [

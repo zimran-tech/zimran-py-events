@@ -5,7 +5,11 @@ from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME
 
 
 @dataclass(kw_only=True)
-class QueueBaseScheme:
+class ExchangeScheme:
+    name: str
+    durable: bool = True
+    type: str = 'direct'  # noqa: A003
+    internal: bool = False
     durable: bool = True
     passive: bool = False
     auto_delete: bool = False
@@ -13,8 +17,8 @@ class QueueBaseScheme:
     timeout: float | int | None = None
 
     def __post_init__(self):
-        if self.arguments is None:
-            self.arguments = {}
+        if isinstance(self.arguments, dict):
+            self.arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
     def as_dict(self, exclude: list | None = None, exclude_none: bool = False) -> dict:
         excluded_keys = exclude if isinstance(exclude, (list, tuple)) else []
@@ -27,30 +31,8 @@ class QueueBaseScheme:
 
 
 @dataclass(kw_only=True)
-class ExchangeScheme(QueueBaseScheme):
-    name: str
-    durable: bool = True
-    type: str = 'direct'
-    internal: bool = False
-
-    def __post_init__(self):
-        super().__post_init__()
-
-        if isinstance(self.arguments, dict):
-            self.arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
-
-
-@dataclass(kw_only=True)
-class QueueScheme(QueueBaseScheme):
-    name: str | None = None
-    exclusive: bool = False
-
-
-@dataclass(kw_only=True)
 class ContextScheme:
     correlation_id: str | None = None
-    queue: QueueScheme | None = None
-    bind_queue_to_exchange: bool = False
     exchange: ExchangeScheme | None = None
     headers: dict | None = None
 
