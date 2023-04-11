@@ -1,5 +1,12 @@
 from aiormq.exceptions import AMQPChannelError, AMQPConnectionError
-from loguru import logger
+
+
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+
+    logger = logging.getLogger(__name__)
 
 from .exceptions import ContextTypeError, ExchangeTypeError
 from .schemas import ContextScheme, ExchangeScheme
@@ -30,7 +37,7 @@ def cleanup_and_normalize_queue_name(queue_name: str):
 
 def retry_policy(info):
     if isinstance(info.exception, (AMQPConnectionError, AMQPChannelError)):
-        logger.warning(f'Retrying connection... | attempt_amount: {info.fails}')
+        logger.warning(f'Retrying connection... | attempt amount: {info.fails}')
         return info.fails > 3, (info.fails - 1) * 2
 
     return True, 0
