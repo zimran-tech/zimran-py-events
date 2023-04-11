@@ -3,7 +3,7 @@
 The `zimran-py-events` module provides AMQP interface
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?color=green&style=plastic)](https://opensource.org/licenses/MIT)
-![code size](<https://img.shields.io/github/languages/code-size/zimran-tech/zimran-py-events?color=green&style=plastic>)
+![code size](<https://img.shields.io/github/languages/code-size/zimran-tech/zimran-py-events?style=plastic>)
 
 ## Installation
 
