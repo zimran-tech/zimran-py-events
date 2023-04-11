@@ -51,7 +51,7 @@ class Consumer(Connection, ConsumerMixin):
     def __init__(self, *, service_name: str, broker_url: str, channel_number: int = 1, prefetch_count: int = 10):
         super().__init__(broker_url=broker_url, channel_number=channel_number)
 
-        self._service_name = service_name
+        self._service_name = service_name.replace('-', '_').lower()
         self._prefetch_count = prefetch_count
 
         self._event_handlers = {}
@@ -106,7 +106,7 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
     ):
         super().__init__(broker_url=broker_url, loop=loop, channel_number=channel_number)
 
-        self._service_name = service_name
+        self._service_name = service_name.replace('-', '_').lower()
         self._prefetch_count = prefetch_count
 
         self._event_handlers = {}
