@@ -67,6 +67,7 @@ class AsyncProducer(AsyncConnection):
         if context.exchange is None:
             await channel.default_exchange.publish(message=message, routing_key=routing_key)
             logger.info(f'Message published to basic exchange | routing_key: {routing_key}')
+            return
 
         validate_exchange(context.exchange)
         await self._declare_unroutable_queue(channel)
@@ -78,7 +79,7 @@ class AsyncProducer(AsyncConnection):
     @staticmethod
     def _get_message(context: ContextScheme, payload: dict):
         return aio_pika.Message(
-            body=json.dumps(payload, default=str),
+            body=json.dumps(payload, default=str).encode(),
             headers=context.headers,
             content_type='application/json',
             correlation_id=context.correlation_id,

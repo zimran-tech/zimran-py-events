@@ -61,11 +61,11 @@ class Consumer(Connection, ConsumerMixin):
 
             self._declare_unroutable_exchange()
 
-            result = self.channel.queue_declare(self._service_name, exclusive=True)
-            queue_name = result.method.queue
-
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
+                queue_result = self.channel.queue_declare(f'{self._service_name}_{event_name}_q')
+                queue_name = queue_result.method.queue
+
                 if exchange := data['exchange']:
                     self.channel.exchange_declare(
                         exchange=exchange.name,
@@ -78,9 +78,8 @@ class Consumer(Connection, ConsumerMixin):
                 logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {event_name}')
                 consumer_amount += 1
 
-            self.channel.start_consuming()
             logger.info(f'Registered {consumer_amount} consumers')
-
+            self.channel.start_consuming()
         except Exception as exc:
             logger.error(f'Exception occured | error: {exc}')
         finally:
@@ -117,9 +116,9 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
             tasks = [self._declare_unroutable_queue(), channel.set_qos(prefetch_count=self._prefetch_count)]
             await asyncio.gather(*tasks)
 
-            queue = await channel.declare_queue(self._service_name, exclusive=True)
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
+                queue = await channel.declare_queue(f'{self._service_name}_{event_name}_q', exclusive=True)
                 if _exchange := data['exchange']:
                     exchange = await channel.declare_exchange(**_exchange.as_dict(exclude_none=True))
                     await queue.bind(exchange=exchange, routing_key=event_name)

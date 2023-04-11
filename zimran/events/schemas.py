@@ -17,6 +17,9 @@ class ExchangeScheme:
     timeout: float | int | None = None
 
     def __post_init__(self):
+        if self.arguments is None:
+            self.arguments = {}
+
         if isinstance(self.arguments, dict):
             self.arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
