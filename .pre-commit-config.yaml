@@ -1,4 +1,4 @@
-cddefault_language_version:
+default_language_version:
   python: python3.10
 
 types: .py
