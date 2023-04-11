@@ -1,3 +1,6 @@
+from aiormq.exceptions import AMQPChannelError, AMQPConnectionError
+from loguru import logger
+
 from .exceptions import ContextTypeError, ExchangeTypeError
 from .schemas import ContextScheme, ExchangeScheme
 
@@ -23,3 +26,11 @@ def cleanup_and_normalize_queue_name(queue_name: str):
         queue_name = queue_name[:-1]
 
     return f'{queue_name}_q'
+
+
+def retry_policy(info):
+    if isinstance(info.exception, (AMQPConnectionError, AMQPChannelError)):
+        logger.warning(f'Retrying connection... | attempt_amount: {info.fails}')
+        return info.fails > 3, (info.fails - 1) * 2
+
+    return True, 0

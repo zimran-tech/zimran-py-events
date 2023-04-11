@@ -2,6 +2,9 @@ import asyncio
 
 import aio_pika
 import pika
+from aioretry import retry
+
+from zimran.events.utils import retry_policy
 
 
 try:
@@ -89,6 +92,7 @@ class AsyncConnection:
 
         return self._channel
 
+    @retry(retry_policy)
     async def connect(self):
         self._channel = await (await self.connection).channel(channel_number=self._channel_number)
         logger.info('Channel connection established')
