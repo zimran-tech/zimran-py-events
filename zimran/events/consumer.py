@@ -1,6 +1,7 @@
 import asyncio
 
 import aio_pika
+from aioretry import retry
 
 
 try:
@@ -14,7 +15,7 @@ except ImportError:
 from zimran.events.connection import AsyncConnection, Connection
 from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
 from zimran.events.schemas import ExchangeScheme
-from zimran.events.utils import validate_exchange
+from zimran.events.utils import cleanup_and_normalize_queue_name, retry_policy, validate_exchange
 
 
 class ConsumerMixin:
@@ -63,8 +64,8 @@ class Consumer(Connection, ConsumerMixin):
 
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
-                queue_result = self.channel.queue_declare(f'{self._service_name}_{event_name}_q')
-                queue_name = queue_result.method.queue
+                queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{event_name}')
+                self.channel.queue_declare(queue_name, durable=True)
 
                 if exchange := data['exchange']:
                     self.channel.exchange_declare(
@@ -81,7 +82,7 @@ class Consumer(Connection, ConsumerMixin):
             logger.info(f'Registered {consumer_amount} consumers')
             self.channel.start_consuming()
         except Exception as exc:
-            logger.error(f'Exception occured | error: {exc}')
+            logger.error(f'Exception occured | error: {exc} | type: {type(exc)}')
         finally:
             self.disconnect()
 
@@ -110,28 +111,31 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
 
         self._event_handlers = {}
 
+    @retry(retry_policy)
     async def run(self):
         try:
             channel = await self.channel
-            tasks = [self._declare_unroutable_queue(), channel.set_qos(prefetch_count=self._prefetch_count)]
+            tasks = [self._declare_unroutable_queue(channel), channel.set_qos(prefetch_count=self._prefetch_count)]
             await asyncio.gather(*tasks)
 
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
-                queue = await channel.declare_queue(f'{self._service_name}_{event_name}_q', exclusive=True)
+                queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{event_name}')
+                queue = await channel.declare_queue(queue_name, durable=True)
                 if _exchange := data['exchange']:
                     exchange = await channel.declare_exchange(**_exchange.as_dict(exclude_none=True))
                     await queue.bind(exchange=exchange, routing_key=event_name)
 
                 await queue.consume(data['handler'])
 
-                logger.info(f'Registering consumer | queue: {queue.name} | routing_key: {event_name}')
+                logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {event_name}')
                 consumer_amount += 1
 
             logger.info(f'Registered {consumer_amount} consumers')
             await asyncio.Future()
         except Exception as exc:
             logger.error(f'Exception occured | error: {exc}')
+            raise exc
         finally:
             await self.disconnect()
 

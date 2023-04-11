@@ -1,6 +1,7 @@
 import json
 
 import aio_pika
+from aioretry import retry
 
 
 try:
@@ -11,10 +12,10 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 
-from zimran.events.connection import AsyncConnection, Connection
-from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
-from zimran.events.schemas import ContextScheme
-from zimran.events.utils import validate_context, validate_exchange
+from .connection import AsyncConnection, Connection
+from .constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
+from .schemas import ContextScheme
+from .utils import retry_policy, validate_context, validate_exchange
 
 
 class Producer(Connection):
@@ -55,6 +56,7 @@ class AsyncProducer(AsyncConnection):
     def __init__(self, *, broker_url: str, channel_number: int = 1):
         super().__init__(broker_url=broker_url, channel_number=channel_number)
 
+    @retry(retry_policy)
     async def publish(self, routing_key: str, *, payload: dict, context: ContextScheme | None = None):
         if context is None:
             context = ContextScheme()
