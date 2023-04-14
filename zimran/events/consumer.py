@@ -13,7 +13,7 @@ except ImportError:
 
 
 from zimran.events.connection import AsyncConnection, Connection
-from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
+from zimran.events.constants import DEAD_LETTER_EXCHANGE_NAME, UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
 from zimran.events.schemas import ExchangeScheme
 from zimran.events.utils import cleanup_and_normalize_queue_name, retry_policy, validate_exchange
 
@@ -65,7 +65,13 @@ class Consumer(Connection, ConsumerMixin):
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
                 queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{event_name}')
-                self.channel.queue_declare(queue_name, durable=True)
+                self.channel.queue_declare(
+                    queue_name,
+                    durable=True,
+                    arguments={
+                        'x-dead-letter-exchange': DEAD_LETTER_EXCHANGE_NAME,
+                    },
+                )
 
                 if exchange := data['exchange']:
                     self.channel.exchange_declare(
@@ -121,7 +127,13 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
                 queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{event_name}')
-                queue = await channel.declare_queue(queue_name, durable=True)
+                queue = await channel.declare_queue(
+                    queue_name,
+                    durable=True,
+                    arguments={
+                        'x-dead-letter-exchange': DEAD_LETTER_EXCHANGE_NAME,
+                    },
+                )
                 if _exchange := data['exchange']:
                     exchange = await channel.declare_exchange(**_exchange.as_dict(exclude_none=True))
                     await queue.bind(exchange=exchange, routing_key=event_name)
