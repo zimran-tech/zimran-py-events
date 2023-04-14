@@ -1,6 +1,7 @@
 import json
 
 import aio_pika
+import pika
 from aioretry import retry
 
 
@@ -28,9 +29,15 @@ class Producer(Connection):
         else:
             validate_context(context)
 
+        properties = pika.BasicProperties(
+            content_type='application/json',
+            delivery_mode=pika.DeliveryMode.Persistent,
+            correlation_id=context.correlation_id,
+            headers=context.headers,
+        )
         body = json.dumps(payload, default=str)
         if context.exchange is None:
-            self.channel.basic_publish(exchange='', routing_key=routing_key, body=body)
+            self.channel.basic_publish(exchange='', routing_key=routing_key, body=body, properties=properties)
             logger.info(f'Message published to basic exchange | routing_key: {routing_key}')
             return
 
@@ -43,7 +50,12 @@ class Producer(Connection):
             **context.exchange.as_dict(exclude=['name', 'type', 'timeout'], exclude_none=True),
         )
 
-        self.channel.basic_publish(exchange=context.exchange.name, routing_key=routing_key, body=body)
+        self.channel.basic_publish(
+            exchange=context.exchange.name,
+            routing_key=routing_key,
+            body=body,
+            properties=properties,
+        )
         logger.info(f'Message published to {context.exchange.name} exchange | routing_key: {routing_key}')
 
     def _declare_unroutable_queue(self):
@@ -85,6 +97,7 @@ class AsyncProducer(AsyncConnection):
             headers=context.headers,
             content_type='application/json',
             correlation_id=context.correlation_id,
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
         )
 
     async def _declare_unroutable_queue(self, channel: aio_pika.abc.AbstractRobustChannel):
