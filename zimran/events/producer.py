@@ -15,48 +15,50 @@ except ImportError:
 
 from .connection import AsyncConnection, Connection
 from .constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
-from .schemas import ContextScheme
-from .utils import retry_policy, validate_context, validate_exchange
+from .schemas import ChannelPropertiesScheme, ExchangeScheme
+from .utils import retry_policy, validate_exchange, validate_queue_properties
 
 
 class Producer(Connection):
     def __init__(self, *, broker_url: str, channel_number: int = 1):
         super().__init__(broker_url=broker_url, channel_number=channel_number)
 
-    def publish(self, routing_key: str, *, payload: dict, context: ContextScheme | None = None):
-        if context is None:
-            context = ContextScheme()
+    def publish(
+        self,
+        routing_key: str,
+        *,
+        payload: dict,
+        exchange: ExchangeScheme | None = None,
+        properties: ChannelPropertiesScheme | None = None,
+    ):
+        if properties is None:
+            properties = ChannelPropertiesScheme()
         else:
-            validate_context(context)
+            validate_queue_properties(properties)
 
-        properties = pika.BasicProperties(
-            content_type='application/json',
-            delivery_mode=pika.DeliveryMode.Persistent,
-            correlation_id=context.correlation_id,
-            headers=context.headers,
-        )
+        basic_properties = pika.BasicProperties(**properties.as_dict(exclude_none=True))
         body = json.dumps(payload, default=str)
-        if context.exchange is None:
-            self.channel.basic_publish(exchange='', routing_key=routing_key, body=body, properties=properties)
+        if exchange is None:
+            self.channel.basic_publish(exchange='', routing_key=routing_key, body=body, properties=basic_properties)
             logger.info(f'Message published to basic exchange | routing_key: {routing_key}')
             return
 
         self._declare_unroutable_queue()
 
-        validate_exchange(context.exchange)
+        validate_exchange(exchange)
         self.channel.exchange_declare(
-            exchange=context.exchange.name,
-            exchange_type=context.exchange.type,
-            **context.exchange.as_dict(exclude=['name', 'type', 'timeout'], exclude_none=True),
+            exchange=exchange.name,
+            exchange_type=exchange.type,
+            **exchange.as_dict(exclude=['name', 'type', 'timeout'], exclude_none=True),
         )
 
         self.channel.basic_publish(
-            exchange=context.exchange.name,
+            exchange=exchange.name,
             routing_key=routing_key,
             body=body,
-            properties=properties,
+            properties=basic_properties,
         )
-        logger.info(f'Message published to {context.exchange.name} exchange | routing_key: {routing_key}')
+        logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
 
     def _declare_unroutable_queue(self):
         self.channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
@@ -69,36 +71,37 @@ class AsyncProducer(AsyncConnection):
         super().__init__(broker_url=broker_url, channel_number=channel_number)
 
     @retry(retry_policy)
-    async def publish(self, routing_key: str, *, payload: dict, context: ContextScheme | None = None):
-        if context is None:
-            context = ContextScheme()
+    async def publish(
+        self,
+        routing_key: str,
+        *,
+        payload: dict,
+        exchange: ExchangeScheme | None = None,
+        properties: ChannelPropertiesScheme | None = None,
+    ):
+        if properties is None:
+            properties = ChannelPropertiesScheme()
         else:
-            validate_context(context)
+            validate_queue_properties(properties)
 
-        message = self._get_message(context=context, payload=payload)
+        message = self._get_message(properties=properties, payload=payload)
 
         channel = await self.channel
-        if context.exchange is None:
+        if exchange is None:
             await channel.default_exchange.publish(message=message, routing_key=routing_key)
             logger.info(f'Message published to basic exchange | routing_key: {routing_key}')
             return
 
-        validate_exchange(context.exchange)
+        validate_exchange(exchange)
         await self._declare_unroutable_queue(channel)
 
-        exchange = await channel.declare_exchange(**context.exchange.as_dict(exclude_none=True))
-        await exchange.publish(message=message, routing_key=routing_key)
-        logger.info(f'Message published to {context.exchange.name} exchange | routing_key: {routing_key}')
+        declared_exchange = await channel.declare_exchange(**exchange.as_dict(exclude_none=True))
+        await declared_exchange.publish(message=message, routing_key=routing_key)
+        logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
 
     @staticmethod
-    def _get_message(context: ContextScheme, payload: dict):
-        return aio_pika.Message(
-            body=json.dumps(payload, default=str).encode(),
-            headers=context.headers,
-            content_type='application/json',
-            correlation_id=context.correlation_id,
-            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-        )
+    def _get_message(properties: ChannelPropertiesScheme, payload: dict):
+        return aio_pika.Message(body=json.dumps(payload, default=str).encode(), **properties.as_dict(exclude_none=True))
 
     async def _declare_unroutable_queue(self, channel: aio_pika.abc.AbstractRobustChannel):
         exchange = await channel.declare_exchange(name=UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)

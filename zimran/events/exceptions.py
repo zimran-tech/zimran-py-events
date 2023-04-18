@@ -6,5 +6,5 @@ class ExchangeTypeError(TypeError):
     pass
 
 
-class ContextTypeError(TypeError):
+class ChannelPropertiesTypeError(TypeError):
     pass
