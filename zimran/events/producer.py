@@ -16,7 +16,7 @@ except ImportError:
 from .connection import AsyncConnection, Connection
 from .constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
 from .schemas import ChannelPropertiesScheme, ExchangeScheme
-from .utils import retry_policy, validate_exchange, validate_queue_properties
+from .utils import retry_policy, validate_channel_properties, validate_exchange
 
 
 class Producer(Connection):
@@ -34,7 +34,7 @@ class Producer(Connection):
         if properties is None:
             properties = ChannelPropertiesScheme()
         else:
-            validate_queue_properties(properties)
+            validate_channel_properties(properties)
 
         basic_properties = pika.BasicProperties(**properties.as_dict(exclude_none=True))
         body = json.dumps(payload, default=str)
@@ -82,7 +82,7 @@ class AsyncProducer(AsyncConnection):
         if properties is None:
             properties = ChannelPropertiesScheme()
         else:
-            validate_queue_properties(properties)
+            validate_channel_properties(properties)
 
         message = self._get_message(properties=properties, payload=payload)
 
