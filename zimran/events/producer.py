@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import aio_pika
@@ -67,8 +68,9 @@ class Producer(Connection):
 
 
 class AsyncProducer(AsyncConnection):
-    def __init__(self, *, broker_url: str, channel_number: int = 1):
-        super().__init__(broker_url=broker_url, channel_number=channel_number)
+    def __init__(self, *, broker_url: str, channel_number: int = 1, loop: asyncio.AbstractEventLoop | None = None):
+        loop = loop or asyncio.get_event_loop()
+        super().__init__(broker_url=broker_url, channel_number=channel_number, loop=loop)
 
     @retry(retry_policy)
     async def publish(

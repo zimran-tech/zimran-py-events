@@ -61,9 +61,9 @@ class Connection:
 
 
 class AsyncConnection:
-    def __init__(self, *, broker_url: str, loop=None, channel_number: int = 1):
+    def __init__(self, *, broker_url: str, loop: asyncio.AbstractEventLoop, channel_number: int = 1):
         self._url = broker_url
-        self._loop = loop or asyncio.get_event_loop()
+        self._loop = loop
 
         self._connection = None
         self._channel = None
