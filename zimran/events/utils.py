@@ -8,8 +8,8 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
 
-from .exceptions import ContextTypeError, ExchangeTypeError
-from .schemas import ContextScheme, ExchangeScheme
+from .exceptions import ChannelPropertiesTypeError, ExchangeTypeError
+from .schemas import ChannelPropertiesScheme, ExchangeScheme
 
 
 def validate_exchange(exchange: ExchangeScheme):
@@ -17,9 +17,11 @@ def validate_exchange(exchange: ExchangeScheme):
         raise ExchangeTypeError('ExchangeTypeError: <exchange> must be instance of <ExchangeScheme>')
 
 
-def validate_context(context: ContextScheme):
-    if not isinstance(context, ContextScheme):
-        raise ContextTypeError('ContextTypeError: <context> must be instance of <ContextScheme>')
+def validate_channel_properties(properties: ChannelPropertiesScheme):
+    if not isinstance(properties, ChannelPropertiesScheme):
+        raise ChannelPropertiesTypeError(
+            'ChannelPropertiesTypeError: <properties> must be instance of <ChannelPropertiesScheme>',
+        )
 
 
 def cleanup_and_normalize_queue_name(queue_name: str):
