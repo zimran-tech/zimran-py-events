@@ -1,8 +1,7 @@
-import asyncio
-
 import aio_pika
 import pika
 from aioretry import retry
+from pika.adapters.blocking_connection import BlockingChannel
 
 from zimran.events.utils import retry_policy
 
@@ -27,7 +26,7 @@ class Connection:
         self.connect()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: U100
         self.disconnect()
 
     @property
@@ -39,7 +38,7 @@ class Connection:
         return self._connection
 
     @property
-    def channel(self):
+    def channel(self) -> BlockingChannel:
         if self._channel is None or self._channel.is_closed:
             self._channel = self.connection.channel(channel_number=self._channel_number)
             logger.info('Channel connection established')
@@ -61,9 +60,8 @@ class Connection:
 
 
 class AsyncConnection:
-    def __init__(self, *, broker_url: str, loop: asyncio.AbstractEventLoop, channel_number: int = 1):
+    def __init__(self, *, broker_url: str, channel_number: int = 1):
         self._url = broker_url
-        self._loop = loop
 
         self._connection = None
         self._channel = None
@@ -73,13 +71,13 @@ class AsyncConnection:
         await self.connect()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):  # noqa: U100
         await self.disconnect()
 
     @property
     async def connection(self) -> aio_pika.abc.AbstractRobustConnection:
         if self._connection is None or self._connection.is_closed:
-            self._connection = await aio_pika.connect_robust(url=self._url, loop=self._loop)
+            self._connection = await aio_pika.connect_robust(url=self._url)
             logger.info('AMQP connection established')
 
         return self._connection
