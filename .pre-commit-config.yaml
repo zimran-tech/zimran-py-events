@@ -79,6 +79,7 @@ repos:
           - flake8-commas
           - flake8-comprehensions
           - flake8-eradicate
+          - flake8-unused-arguments
 
   - repo: https://github.com/psf/black
     rev: 22.10.0

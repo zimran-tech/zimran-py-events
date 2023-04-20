@@ -1,8 +1,6 @@
 import asyncio
 
-import aio_pika
 from aioretry import retry
-from pika.channel import Channel
 
 
 try:
@@ -14,7 +12,7 @@ except ImportError:
 
 
 from zimran.events.connection import AsyncConnection, Connection
-from zimran.events.constants import DEAD_LETTER_EXCHANGE_NAME, UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
+from zimran.events.constants import DEAD_LETTER_EXCHANGE_NAME
 from zimran.events.schemas import ExchangeScheme
 from zimran.events.utils import cleanup_and_normalize_queue_name, retry_policy, validate_exchange
 
@@ -62,8 +60,6 @@ class Consumer(Connection, ConsumerMixin):
             channel = self.channel
             channel.basic_qos(prefetch_count=self._prefetch_count)
 
-            self._declare_unroutable_exchange(channel)
-
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
                 queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{event_name}')
@@ -94,13 +90,6 @@ class Consumer(Connection, ConsumerMixin):
         finally:
             self.disconnect()
 
-    def _declare_unroutable_exchange(self, channel: Channel):
-        channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
-        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True)
-        channel.queue_bind(queue=UNROUTABLE_QUEUE_NAME, exchange=UNROUTABLE_EXCHANGE_NAME, routing_key='')
-
-        logger.info('Declared unroutable events exchange')
-
 
 class AsyncConsumer(AsyncConnection, ConsumerMixin):
     def __init__(
@@ -110,10 +99,8 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
         broker_url: str,
         channel_number: int = 1,
         prefetch_count: int = 10,
-        loop=None,
     ):
-        loop = loop or asyncio.get_event_loop()
-        super().__init__(broker_url=broker_url, loop=loop, channel_number=channel_number)
+        super().__init__(broker_url=broker_url, channel_number=channel_number)
 
         self._service_name = service_name.replace('-', '_').lower()
         self._prefetch_count = prefetch_count
@@ -124,8 +111,7 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
     async def run(self):
         try:
             channel = await self.channel
-            tasks = [self._declare_unroutable_queue(channel), channel.set_qos(prefetch_count=self._prefetch_count)]
-            await asyncio.gather(*tasks)
+            await channel.set_qos(prefetch_count=self._prefetch_count)
 
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
@@ -153,8 +139,3 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
             raise exc
         finally:
             await self.disconnect()
-
-    async def _declare_unroutable_queue(self, channel: aio_pika.abc.AbstractRobustChannel):
-        exchange = await channel.declare_exchange(name=UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
-        queue = await channel.declare_queue(name=UNROUTABLE_QUEUE_NAME, durable=True)
-        await queue.bind(exchange=exchange, routing_key='')

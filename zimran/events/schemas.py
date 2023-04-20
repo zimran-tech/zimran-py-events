@@ -2,8 +2,6 @@ import datetime
 import uuid
 from dataclasses import asdict, dataclass
 
-from zimran.events.constants import UNROUTABLE_EXCHANGE_NAME
-
 
 class SchemeBase:
     def as_dict(self, exclude: list | None = None, exclude_none: bool = False) -> dict:
@@ -31,9 +29,6 @@ class ExchangeScheme(SchemeBase):
     def __post_init__(self):
         if self.arguments is None:
             self.arguments = {}
-
-        if isinstance(self.arguments, dict):
-            self.arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
 
 @dataclass(kw_only=True)

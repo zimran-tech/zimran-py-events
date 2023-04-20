@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 import aio_pika
@@ -15,7 +14,6 @@ except ImportError:
 
 
 from .connection import AsyncConnection, Connection
-from .constants import UNROUTABLE_EXCHANGE_NAME, UNROUTABLE_QUEUE_NAME
 from .schemas import ChannelPropertiesScheme, ExchangeScheme
 from .utils import retry_policy, validate_channel_properties, validate_exchange
 
@@ -44,9 +42,8 @@ class Producer(Connection):
             logger.info(f'Message published to basic exchange | routing_key: {routing_key}')
             return
 
-        self._declare_unroutable_queue()
-
         validate_exchange(exchange)
+
         self.channel.exchange_declare(
             exchange=exchange.name,
             exchange_type=exchange.type,
@@ -61,16 +58,10 @@ class Producer(Connection):
         )
         logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
 
-    def _declare_unroutable_queue(self):
-        self.channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
-        self.channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True)
-        self.channel.queue_bind(queue=UNROUTABLE_QUEUE_NAME, exchange=UNROUTABLE_EXCHANGE_NAME, routing_key='')
-
 
 class AsyncProducer(AsyncConnection):
-    def __init__(self, *, broker_url: str, channel_number: int = 1, loop: asyncio.AbstractEventLoop | None = None):
-        loop = loop or asyncio.get_event_loop()
-        super().__init__(broker_url=broker_url, channel_number=channel_number, loop=loop)
+    def __init__(self, *, broker_url: str, channel_number: int = 1):
+        super().__init__(broker_url=broker_url, channel_number=channel_number)
 
     @retry(retry_policy)
     async def publish(
@@ -95,7 +86,6 @@ class AsyncProducer(AsyncConnection):
             return
 
         validate_exchange(exchange)
-        await self._declare_unroutable_queue(channel)
 
         declared_exchange = await channel.declare_exchange(**exchange.as_dict(exclude_none=True))
         await declared_exchange.publish(message=message, routing_key=routing_key)
@@ -104,8 +94,3 @@ class AsyncProducer(AsyncConnection):
     @staticmethod
     def _get_message(properties: ChannelPropertiesScheme, payload: dict):
         return aio_pika.Message(body=json.dumps(payload, default=str).encode(), **properties.as_dict(exclude_none=True))
-
-    async def _declare_unroutable_queue(self, channel: aio_pika.abc.AbstractRobustChannel):
-        exchange = await channel.declare_exchange(name=UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
-        queue = await channel.declare_queue(name=UNROUTABLE_QUEUE_NAME, durable=True)
-        await queue.bind(exchange=exchange, routing_key='')
