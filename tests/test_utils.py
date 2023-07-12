@@ -3,8 +3,8 @@ import pytest
 from aiormq.exceptions import AMQPConnectionError
 
 from zimran.events import utils
+from zimran.events.dto import ChannelProperties, Exchange
 from zimran.events.exceptions import ChannelPropertiesTypeError, ExchangeTypeError
-from zimran.events.schemas import ChannelPropertiesScheme, ExchangeScheme
 
 
 @pytest.mark.parametrize(
@@ -21,14 +21,14 @@ def test_queue_name_cleaner(case, expected):
 
 
 def test_validate_exchange():
-    utils.validate_exchange(ExchangeScheme(name='exchange'))
+    utils.validate_exchange(Exchange(name='exchange'))
 
     with pytest.raises(ExchangeTypeError):
         utils.validate_exchange({'name': 'exchange'})
 
 
 def test_validate_channel_props():
-    utils.validate_channel_properties(ChannelPropertiesScheme())
+    utils.validate_channel_properties(ChannelProperties())
 
     with pytest.raises(ChannelPropertiesTypeError):
         utils.validate_channel_properties({})

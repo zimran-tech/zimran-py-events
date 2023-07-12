@@ -12,7 +12,7 @@ except ImportError:
 
 
 from zimran.events.connection import AsyncConnection, Connection
-from zimran.events.constants import DEAD_LETTER_EXCHANGE_NAME
+from zimran.events.constants import DEFAULT_DEAD_LETTER_EXCHANGE_NAME
 from zimran.events.schemas import ExchangeScheme
 from zimran.events.utils import cleanup_and_normalize_queue_name, retry_policy, validate_exchange
 
@@ -60,6 +60,9 @@ class Consumer(Connection, ConsumerMixin):
             channel = self.channel
             channel.basic_qos(prefetch_count=self._prefetch_count)
 
+            self._declare_unroutable_queue(channel)
+            self._declare_default_dead_letter_exchange(channel)
+
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
                 queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{event_name}')
@@ -67,7 +70,7 @@ class Consumer(Connection, ConsumerMixin):
                     queue_name,
                     durable=True,
                     arguments={
-                        'x-dead-letter-exchange': DEAD_LETTER_EXCHANGE_NAME,
+                        'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
                     },
                 )
 
@@ -112,6 +115,13 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
         try:
             channel = await self.channel
             await channel.set_qos(prefetch_count=self._prefetch_count)
+            await self._declare_unroutable_queue(channel)
+
+            await asyncio.gather(
+                self._declare_unroutable_queue(channel),
+                self._declare_default_dead_letter_exchange(channel),
+                return_exceptions=True,
+            )
 
             consumer_amount = 0
             for event_name, data in self._event_handlers.items():
@@ -120,7 +130,7 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
                     queue_name,
                     durable=True,
                     arguments={
-                        'x-dead-letter-exchange': DEAD_LETTER_EXCHANGE_NAME,
+                        'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
                     },
                 )
                 if _exchange := data['exchange']:
