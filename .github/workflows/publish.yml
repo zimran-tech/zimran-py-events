@@ -39,6 +39,7 @@ jobs:
 
   pypi-deploy:
     runs-on: ubuntu-latest
+    needs: [linter-with-tests, testpypi-deploy]
     if: github.event_name == 'release' && github.event.action == 'published'
     environment: production
     steps:
