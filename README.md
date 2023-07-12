@@ -1,4 +1,4 @@
-## zimran-contrib
+## zimran-events
 
 The `zimran-py-events` module provides AMQP interface
 
@@ -31,13 +31,13 @@ await producer.publish('some.event.routing', {'msg': 'hello, world'})
 ```python
 
 from zimran.events import Consumer
-from zimran.events.schemas import ExchangeScheme
+from zimran.events.dto import Exchange
 
 consumer = Consumer(service_name='my-service', broker_url='')
 consumer.add_event_handler(
             name='routing-key',
             handler=handler_func,
-            exchange=ExchangeScheme(
+            exchange=Exchange(
                 name='exchange-name',
                 type='exchange-type',
                 durable=True,
