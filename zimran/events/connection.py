@@ -3,6 +3,12 @@ import pika
 from aioretry import retry
 from pika.adapters.blocking_connection import BlockingChannel
 
+from zimran.events.constants import (
+    DEAD_LETTER_QUEUE_NAME,
+    DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
+    UNROUTABLE_EXCHANGE_NAME,
+    UNROUTABLE_QUEUE_NAME,
+)
 from zimran.events.utils import retry_policy
 
 
@@ -58,6 +64,16 @@ class Connection:
 
         logger.info('AMQP Connection disconnected')
 
+    def _declare_unroutable_queue(self, channel: BlockingChannel):
+        channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
+        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True)
+        channel.queue_bind(queue=UNROUTABLE_QUEUE_NAME, exchange=UNROUTABLE_EXCHANGE_NAME, routing_key='')
+
+    def _declare_default_dead_letter_exchange(self, channel: BlockingChannel):
+        channel.exchange_declare(exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, exchange_type='fanout', durable=True)
+        channel.queue_declare(queue=DEAD_LETTER_QUEUE_NAME, durable=True)
+        channel.queue_bind(queue=DEAD_LETTER_QUEUE_NAME, exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, routing_key='')
+
 
 class AsyncConnection:
     def __init__(self, *, broker_url: str, channel_number: int = 1):
@@ -103,3 +119,17 @@ class AsyncConnection:
             await self._connection.close()
 
         logger.info('AMQP Connection disconnected')
+
+    async def _declare_unroutable_queue(self, channel: aio_pika.abc.AbstractRobustChannel):
+        exchange = await channel.declare_exchange(name=UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
+        queue = await channel.declare_queue(name=UNROUTABLE_QUEUE_NAME, durable=True)
+        await queue.bind(exchange=exchange, routing_key='')
+
+    async def _declare_default_dead_letter_exchange(self, channel: aio_pika.abc.AbstractRobustChannel):
+        exchange = await channel.declare_exchange(
+            name=DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
+            type='fanout',
+            durable=True,
+        )
+        queue = await channel.declare_queue(name=DEAD_LETTER_QUEUE_NAME, durable=True)
+        await queue.bind(exchange=exchange, routing_key='')
