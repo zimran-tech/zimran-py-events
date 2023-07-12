@@ -5,7 +5,7 @@ on:
     branches:
       - develop
   release:
-    types: [ created ]
+    types: [ published ]
 
 jobs:
   linter-with-tests:
@@ -39,7 +39,7 @@ jobs:
 
   pypi-deploy:
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'created'
+    if: github.event_name == 'release' && github.event.action == 'published'
     environment: production
     steps:
       - name: Checkout
