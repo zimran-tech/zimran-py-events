@@ -1,3 +1,4 @@
+import aioretry
 from aiormq.exceptions import AMQPChannelError, AMQPConnectionError
 
 
@@ -8,19 +9,19 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
 
+from .dto import ChannelProperties, Exchange
 from .exceptions import ChannelPropertiesTypeError, ExchangeTypeError
-from .schemas import ChannelPropertiesScheme, ExchangeScheme
 
 
-def validate_exchange(exchange: ExchangeScheme):
-    if not isinstance(exchange, ExchangeScheme):
-        raise ExchangeTypeError('ExchangeTypeError: <exchange> must be instance of <ExchangeScheme>')
+def validate_exchange(exchange: Exchange):
+    if not isinstance(exchange, Exchange):
+        raise ExchangeTypeError('ExchangeTypeError: <exchange> must be instance of <Exchange>')
 
 
-def validate_channel_properties(properties: ChannelPropertiesScheme):
-    if not isinstance(properties, ChannelPropertiesScheme):
+def validate_channel_properties(properties: ChannelProperties):
+    if not isinstance(properties, ChannelProperties):
         raise ChannelPropertiesTypeError(
-            'ChannelPropertiesTypeError: <properties> must be instance of <ChannelPropertiesScheme>',
+            'ChannelPropertiesTypeError: <properties> must be instance of <ChannelProperties>',
         )
 
 
@@ -40,7 +41,7 @@ def cleanup_and_normalize_queue_name(queue_name: str):
     return f'{queue_name}_q'
 
 
-def retry_policy(info):
+def retry_policy(info: aioretry.RetryInfo):
     if isinstance(info.exception, (AMQPConnectionError, AMQPChannelError)):
         logger.warning(f'Retrying connection... | attempt amount: {info.fails}')
         return info.fails > 3, (info.fails - 1) * 2
