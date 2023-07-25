@@ -15,7 +15,7 @@ except ImportError:
 
 
 from .connection import AsyncConnection, Connection
-from .schemas import ChannelPropertiesScheme, ExchangeScheme
+from .dto import ChannelProperties, Exchange
 from .utils import retry_policy, validate_channel_properties, validate_exchange
 
 
@@ -28,11 +28,11 @@ class Producer(Connection):
         routing_key: str,
         *,
         payload: dict,
-        exchange: ExchangeScheme | None = None,
-        properties: ChannelPropertiesScheme | None = None,
+        exchange: Exchange | None = None,
+        properties: ChannelProperties | None = None,
     ):
         if properties is None:
-            properties = ChannelPropertiesScheme()
+            properties = ChannelProperties()
         else:
             validate_channel_properties(properties)
 
@@ -72,11 +72,11 @@ class AsyncProducer(AsyncConnection):
         routing_key: str,
         *,
         payload: dict,
-        exchange: ExchangeScheme | None = None,
-        properties: ChannelPropertiesScheme | None = None,
+        exchange: Exchange | None = None,
+        properties: ChannelProperties | None = None,
     ):
         if properties is None:
-            properties = ChannelPropertiesScheme()
+            properties = ChannelProperties()
         else:
             validate_channel_properties(properties)
 
@@ -100,5 +100,5 @@ class AsyncProducer(AsyncConnection):
         logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
 
     @staticmethod
-    def _get_message(properties: ChannelPropertiesScheme, payload: dict):
+    def _get_message(properties: ChannelProperties, payload: dict):
         return aio_pika.Message(body=json.dumps(payload, default=str).encode(), **properties.as_dict(exclude_none=True))
