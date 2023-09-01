@@ -66,6 +66,15 @@ class Producer(Connection):
 class AsyncProducer(AsyncConnection):
     def __init__(self, *, broker_url: str, channel_number: int = 1):
         super().__init__(broker_url=broker_url, channel_number=channel_number)
+        self._futures = {}
+        self.callback_queues = {}
+
+    def on_response(self, message: aio_pika.IncomingMessage) -> None:
+        if message.correlation_id is None:
+            return
+
+        future = self._futures.pop(message.correlation_id)
+        future.set_result(message)
 
     @retry(retry_policy)
     async def publish(
@@ -100,26 +109,7 @@ class AsyncProducer(AsyncConnection):
         await declared_exchange.publish(message=message, routing_key=routing_key)
         logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
 
-    @staticmethod
-    def _get_message(properties: ChannelProperties, payload: dict):
-        return aio_pika.Message(body=json.dumps(payload, default=str).encode(), **properties.as_dict(exclude_none=True))
-
-
-
-class AsyncRpcProducer(AsyncConnection):
-    def __init__(self, *, broker_url: str, channel_number: int = 1):
-        super().__init__(broker_url=broker_url, channel_number=channel_number)
-        self._futures = {}
-        self.callback_queues = {}
-
-    def on_response(self, message: aio_pika.IncomingMessage) -> None:
-        if message.correlation_id is None:
-            return
-
-        future = self._futures.pop(message.correlation_id)
-        future.set_result(message)
-
-    async def publish(
+    async def rpc_publish(
         self,
         routing_key: str,
         *,
