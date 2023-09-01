@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 
 import aio_pika
 import pika
@@ -98,6 +99,76 @@ class AsyncProducer(AsyncConnection):
 
         await declared_exchange.publish(message=message, routing_key=routing_key)
         logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
+
+    @staticmethod
+    def _get_message(properties: ChannelProperties, payload: dict):
+        return aio_pika.Message(body=json.dumps(payload, default=str).encode(), **properties.as_dict(exclude_none=True))
+
+
+
+class AsyncRpcProducer(AsyncConnection):
+    def __init__(self, *, broker_url: str, channel_number: int = 1):
+        super().__init__(broker_url=broker_url, channel_number=channel_number)
+        self._futures = {}
+        self.callback_queues = {}
+
+    def on_response(self, message: aio_pika.IncomingMessage) -> None:
+        if message.correlation_id is None:
+            return
+
+        future = self._futures.pop(message.correlation_id)
+        future.set_result(message)
+
+    async def publish(
+        self,
+        routing_key: str,
+        *,
+        payload: dict,
+        timeout: int = 5,
+        exchange: Exchange,
+    ) -> aio_pika.IncomingMessage:
+        channel = await self.channel
+
+        correlation_id = str(uuid.uuid4())
+        future = asyncio.Future()
+
+        self._futures[correlation_id] = future
+
+        validate_exchange(exchange)
+        declared_exchange, *_ = await asyncio.gather(
+            channel.declare_exchange(**exchange.as_dict(exclude_none=True)),
+            self._declare_unroutable_queue(channel=channel),
+            self._declare_default_dead_letter_exchange(channel=channel),
+            return_exceptions=True,
+        )
+
+        callback_queue_key = f'{exchange.name}_callback_q'
+        callback_queue_name = self.callback_queues.get(callback_queue_key)
+
+        if callback_queue_name is None:
+            callback_queue = await channel.declare_queue(exclusive=True)
+            callback_queue_name = callback_queue.name
+            self.callback_queues[callback_queue_key] = callback_queue_name
+            await callback_queue.bind(declared_exchange)
+            await callback_queue.consume(self.on_response, no_ack=True)
+
+        rpc_properties = ChannelProperties(
+            correlation_id=correlation_id, reply_to=callback_queue_name,
+        )
+        validate_channel_properties(rpc_properties)
+        message = self._get_message(properties=rpc_properties, payload=payload)
+
+        await declared_exchange.publish(message=message, routing_key=routing_key)
+        logger.info(
+            f'Message published to {exchange.name} exchange | routing_key: {routing_key}',
+        )
+
+        try:
+            async with asyncio.timeout(timeout):
+                return await future
+        except TimeoutError:
+            self._futures.pop(correlation_id)
+            raise
 
     @staticmethod
     def _get_message(properties: ChannelProperties, payload: dict):
