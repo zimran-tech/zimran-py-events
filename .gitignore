@@ -220,4 +220,4 @@ poetry.toml
 
 
 .vscode
-.idea/
+.idea/.gitignore
