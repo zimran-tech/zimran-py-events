@@ -69,6 +69,11 @@ class AsyncProducer(AsyncConnection):
         self._futures = {}
         self.callback_queues = {}
 
+    async def disconnect(self):
+        await super().disconnect()
+        self._futures = {}
+        self.callback_queues = {}
+
     def on_response(self, message: aio_pika.IncomingMessage) -> None:
         if message.correlation_id is None:
             return
@@ -112,10 +117,9 @@ class AsyncProducer(AsyncConnection):
     async def rpc_publish(
         self,
         routing_key: str,
-        *,
         payload: dict,
-        timeout: int = 5,
         exchange: Exchange,
+        timeout: int = 5,
     ) -> aio_pika.IncomingMessage:
         channel = await self.channel
 
@@ -133,17 +137,16 @@ class AsyncProducer(AsyncConnection):
         )
 
         callback_queue_key = f'{exchange.name}_callback_q'
-        callback_queue_name = self.callback_queues.get(callback_queue_key)
+        callback_queue = self.callback_queues.get(callback_queue_key)
 
-        if callback_queue_name is None:
+        if callback_queue is None:
             callback_queue = await channel.declare_queue(exclusive=True)
-            callback_queue_name = callback_queue.name
-            self.callback_queues[callback_queue_key] = callback_queue_name
+            self.callback_queues[callback_queue_key] = callback_queue
             await callback_queue.bind(declared_exchange)
             await callback_queue.consume(self.on_response, no_ack=True)
 
         rpc_properties = ChannelProperties(
-            correlation_id=correlation_id, reply_to=callback_queue_name,
+            correlation_id=correlation_id, reply_to=callback_queue.name,
         )
         validate_channel_properties(rpc_properties)
         message = self._get_message(properties=rpc_properties, payload=payload)
