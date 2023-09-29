@@ -1,6 +1,7 @@
 import asyncio
 
-from aioretry import retry
+import aioretry
+import retry
 
 
 try:
@@ -13,12 +14,12 @@ except ImportError:
 
 from zimran.events.connection import AsyncConnection, Connection
 from zimran.events.constants import DEFAULT_DEAD_LETTER_EXCHANGE_NAME
-from zimran.events.schemas import ExchangeScheme
+from zimran.events.dto import Exchange
 from zimran.events.utils import cleanup_and_normalize_queue_name, retry_policy, validate_exchange
 
 
 class ConsumerMixin:
-    def handle_event(self, name: str, *, exchange: ExchangeScheme | None = None):
+    def handle_event(self, name: str, *, exchange: Exchange | None = None):
         if exchange is not None:
             validate_exchange(exchange)
 
@@ -35,7 +36,7 @@ class ConsumerMixin:
         name: str,
         handler: callable,
         *,
-        exchange: ExchangeScheme | None = None,
+        exchange: Exchange | None = None,
     ):
         if exchange is not None:
             validate_exchange(exchange)
@@ -55,6 +56,7 @@ class Consumer(Connection, ConsumerMixin):
 
         self._event_handlers = {}
 
+    @retry.retry(tries=3, delay=1)
     def run(self):
         try:
             channel = self.channel
@@ -69,9 +71,7 @@ class Consumer(Connection, ConsumerMixin):
                 channel.queue_declare(
                     queue_name,
                     durable=True,
-                    arguments={
-                        'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
-                    },
+                    arguments={'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME},
                 )
 
                 if exchange := data['exchange']:
@@ -90,6 +90,7 @@ class Consumer(Connection, ConsumerMixin):
             channel.start_consuming()
         except Exception as exc:
             logger.error(f'Exception occured | error: {exc} | type: {type(exc)}')
+            raise exc
         finally:
             self.disconnect()
 
@@ -110,7 +111,7 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
 
         self._event_handlers = {}
 
-    @retry(retry_policy)
+    @aioretry.retry(retry_policy)
     async def run(self):
         try:
             channel = await self.channel
