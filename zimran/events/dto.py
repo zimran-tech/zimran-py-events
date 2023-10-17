@@ -2,7 +2,7 @@ import datetime
 import uuid
 from dataclasses import asdict, dataclass
 
-from zimran.events.utils import validate_exchange
+from .exceptions import ExchangeTypeError
 
 
 class Base:
@@ -65,5 +65,5 @@ class EventHandler(Base):
     ignore_processed: bool = False
 
     def __post_init__(self):
-        if self.exchange is not None:
-            validate_exchange(self.exchange)
+        if self.exchange is not None and not isinstance(self.exchange, Exchange):
+            raise ExchangeTypeError('ExchangeTypeError: <exchange> must be instance of <Exchange>')
