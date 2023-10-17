@@ -53,7 +53,7 @@ class Consumer(Connection):
 
     def _run(self):
         channel: BlockingChannel = self.get_channel()
-        channel.set_qos(prefetch_count=self._prefetch_count)
+        channel.basic_qos(prefetch_count=self._prefetch_count)
         self._run_routines(channel)
 
         for routing_key, event in self._router.handlers.items():
