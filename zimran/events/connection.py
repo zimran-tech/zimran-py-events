@@ -43,8 +43,7 @@ class Connection:
 
         return self._connection
 
-    @property
-    def channel(self) -> BlockingChannel:
+    def get_channel(self) -> BlockingChannel:
         if self._channel is None or self._channel.is_closed:
             self._channel = self.connection.channel(channel_number=self._channel_number)
             logger.info('Channel connection established')
@@ -69,7 +68,7 @@ class Connection:
         channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True)
         channel.queue_bind(queue=UNROUTABLE_QUEUE_NAME, exchange=UNROUTABLE_EXCHANGE_NAME, routing_key='')
 
-    def _declare_default_dead_letter_exchange(self, channel: BlockingChannel):
+    def _declare_dead_letter_exchange(self, channel: BlockingChannel):
         channel.exchange_declare(exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, exchange_type='fanout', durable=True)
         channel.queue_declare(queue=DEAD_LETTER_QUEUE_NAME, durable=True)
         channel.queue_bind(queue=DEAD_LETTER_QUEUE_NAME, exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, routing_key='')
@@ -98,8 +97,7 @@ class AsyncConnection:
 
         return self._connection
 
-    @property
-    async def channel(self):
+    async def get_channel(self):
         if self._channel is None or self._channel.is_closed:
             self._channel = await (await self.connection).channel(channel_number=self._channel_number)
             logger.info('Channel connection established')
@@ -125,7 +123,7 @@ class AsyncConnection:
         queue = await channel.declare_queue(name=UNROUTABLE_QUEUE_NAME, durable=True)
         await queue.bind(exchange=exchange, routing_key='')
 
-    async def _declare_default_dead_letter_exchange(self, channel: aio_pika.abc.AbstractRobustChannel):
+    async def _declare_dead_letter_exchange(self, channel: aio_pika.abc.AbstractRobustChannel):
         exchange = await channel.declare_exchange(
             name=DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
             type='fanout',
