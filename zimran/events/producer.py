@@ -38,22 +38,24 @@ class Producer(Connection):
 
         basic_properties = pika.BasicProperties(**properties.as_dict(exclude_none=True))
         body = json.dumps(payload, default=str)
+
+        channel = self.get_channel()
         if exchange is None:
-            self.channel.basic_publish(exchange='', routing_key=routing_key, body=body, properties=basic_properties)
+            channel.basic_publish(exchange='', routing_key=routing_key, body=body, properties=basic_properties)
             logger.info(f'Message published to basic exchange | routing_key: {routing_key}')
             return
 
         validate_exchange(exchange)
-        self._declare_unroutable_queue(channel=self.channel)
-        self._declare_default_dead_letter_exchange(channel=self.channel)
+        self._declare_unroutable_queue(channel=channel)
+        self._declare_dead_letter_exchange(channel=channel)
 
-        self.channel.exchange_declare(
+        channel.exchange_declare(
             exchange=exchange.name,
             exchange_type=exchange.type,
             **exchange.as_dict(exclude=['name', 'type', 'timeout'], exclude_none=True),
         )
 
-        self.channel.basic_publish(
+        channel.basic_publish(
             exchange=exchange.name,
             routing_key=routing_key,
             body=body,
@@ -82,7 +84,7 @@ class AsyncProducer(AsyncConnection):
 
         message = self._get_message(properties=properties, payload=payload)
 
-        channel = await self.channel
+        channel = await self.get_channel()
         if exchange is None:
             await channel.default_exchange.publish(message=message, routing_key=routing_key)
             logger.info(f'Message published to basic exchange | routing_key: {routing_key}')
@@ -92,7 +94,7 @@ class AsyncProducer(AsyncConnection):
         declared_exchange, *_ = await asyncio.gather(
             channel.declare_exchange(**exchange.as_dict(exclude_none=True)),
             self._declare_unroutable_queue(channel=channel),
-            self._declare_default_dead_letter_exchange(channel=channel),
+            self._declare_dead_letter_exchange(channel=channel),
             return_exceptions=True,
         )
 

@@ -1,7 +1,10 @@
 import asyncio
+import time
+from functools import partial
 
-import aioretry
-import retry
+import aio_pika
+from pika import exceptions as pika_exceptions
+from pika.adapters.blocking_connection import BlockingChannel
 
 
 try:
@@ -13,94 +16,18 @@ except ImportError:
 
 
 from zimran.events.connection import AsyncConnection, Connection
-from zimran.events.constants import DEFAULT_DEAD_LETTER_EXCHANGE_NAME
-from zimran.events.dto import Exchange
-from zimran.events.utils import cleanup_and_normalize_queue_name, retry_policy, validate_exchange
+from zimran.events.constants import DEAD_LETTER_QUEUE_NAME, DEFAULT_DEAD_LETTER_EXCHANGE_NAME
+from zimran.events.router import Router
+from zimran.events.utils import cleanup_and_normalize_queue_name
 
 
-class ConsumerMixin:
-    def handle_event(self, name: str, *, exchange: Exchange | None = None):
-        if exchange is not None:
-            validate_exchange(exchange)
-
-        def wrapper(func):
-            self._event_handlers[name] = {
-                'exchange': exchange,
-                'handler': func,
-            }
-
-        return wrapper
-
-    def add_event_handler(
-        self,
-        name: str,
-        handler: callable,
-        *,
-        exchange: Exchange | None = None,
-    ):
-        if exchange is not None:
-            validate_exchange(exchange)
-
-        self._event_handlers[name] = {
-            'exchange': exchange,
-            'handler': handler,
-        }
-
-
-class Consumer(Connection, ConsumerMixin):
-    def __init__(self, *, service_name: str, broker_url: str, channel_number: int = 1, prefetch_count: int = 10):
-        super().__init__(broker_url=broker_url, channel_number=channel_number)
-
-        self._service_name = service_name.replace('-', '_').lower()
-        self._prefetch_count = prefetch_count
-
-        self._event_handlers = {}
-
-    @retry.retry(tries=3, delay=1)
-    def run(self):
-        try:
-            channel = self.channel
-            channel.basic_qos(prefetch_count=self._prefetch_count)
-
-            self._declare_unroutable_queue(channel)
-            self._declare_default_dead_letter_exchange(channel)
-
-            consumer_amount = 0
-            for event_name, data in self._event_handlers.items():
-                queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{event_name}')
-                channel.queue_declare(
-                    queue_name,
-                    durable=True,
-                    arguments={'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME},
-                )
-
-                if exchange := data['exchange']:
-                    channel.exchange_declare(
-                        exchange=exchange.name,
-                        exchange_type=exchange.type,
-                        **exchange.as_dict(exclude=['name', 'type', 'timeout']),
-                    )
-                    channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=event_name)
-
-                channel.basic_consume(queue_name, data['handler'])
-                logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {event_name}')
-                consumer_amount += 1
-
-            logger.info(f'Registered {consumer_amount} consumers')
-            channel.start_consuming()
-        except Exception as exc:
-            logger.error(f'Exception occured | error: {exc} | type: {type(exc)}')
-            raise exc
-        finally:
-            self.disconnect()
-
-
-class AsyncConsumer(AsyncConnection, ConsumerMixin):
+class Consumer(Connection):
     def __init__(
         self,
         *,
         service_name: str,
         broker_url: str,
+        router: Router,
         channel_number: int = 1,
         prefetch_count: int = 10,
     ):
@@ -108,45 +35,138 @@ class AsyncConsumer(AsyncConnection, ConsumerMixin):
 
         self._service_name = service_name.replace('-', '_').lower()
         self._prefetch_count = prefetch_count
+        self._router = router
 
-        self._event_handlers = {}
+    def run(self, *, max_retries: int = 5, retry_delay: int = 3):
+        retries = 0
+        while retries <= max_retries:
+            try:
+                self._run()
+            except (pika_exceptions.AMQPConnectionError, pika_exceptions.AMQPChannelError) as e:
+                logger.error(f'Error connecting to RabbitMQ: {e}')
+                retries += 1
+                if retries <= max_retries:
+                    logger.info(f'Retrying in {retry_delay} seconds...')
+                    time.sleep(retry_delay)
+                else:
+                    logger.error('Max retries exceeded, giving up')
+                    break
 
-    @aioretry.retry(retry_policy)
-    async def run(self):
-        try:
-            channel = await self.channel
-            await channel.set_qos(prefetch_count=self._prefetch_count)
-            await self._declare_unroutable_queue(channel)
+    def _run(self):
+        channel: BlockingChannel = self.get_channel()
+        channel.set_qos(prefetch_count=self._prefetch_count)
+        self._run_routines(channel)
 
-            await asyncio.gather(
-                self._declare_unroutable_queue(channel),
-                self._declare_default_dead_letter_exchange(channel),
-                return_exceptions=True,
+        for routing_key, event in self._router.handlers.items():
+            queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
+            channel.queue_declare(
+                queue_name,
+                durable=True,
+                arguments={
+                    'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
+                    'x-dead-letter-routing-key': DEAD_LETTER_QUEUE_NAME,
+                },
             )
 
-            consumer_amount = 0
-            for event_name, data in self._event_handlers.items():
-                queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{event_name}')
-                queue = await channel.declare_queue(
-                    queue_name,
-                    durable=True,
-                    arguments={
-                        'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
-                    },
+            if exchange := event.exchange:
+                channel.exchange_declare(
+                    exchange=exchange.name,
+                    exchange_type=exchange.type,
+                    **exchange.as_dict(exclude=['name', 'type', 'timeout']),
                 )
-                if _exchange := data['exchange']:
-                    exchange = await channel.declare_exchange(**_exchange.as_dict(exclude_none=True))
-                    await queue.bind(exchange=exchange, routing_key=event_name)
+                channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=routing_key)
 
-                await queue.consume(data['handler'])
+            channel.basic_consume(queue_name, event.handler)
 
-                logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {event_name}')
-                consumer_amount += 1
+        channel.start_consuming()
 
-            logger.info(f'Registered {consumer_amount} consumers')
+    def _run_routines(self, channel: BlockingChannel):
+        self._declare_unroutable_queue(channel)
+        self._declare_dead_letter_exchange(channel)
+
+
+class AsyncConsumer(AsyncConnection):
+    def __init__(
+        self,
+        *,
+        service_name: str,
+        broker_url: str,
+        router: Router,
+        channel_number: int = 1,
+        prefetch_count: int = 10,
+    ):
+        super().__init__(broker_url=broker_url, channel_number=channel_number)
+
+        self._service_name = service_name.replace('-', '_').lower()
+        self._prefetch_count = prefetch_count
+        self._router = router
+
+    async def run(self, *, max_retries: int = 5, retry_delay: int = 3):
+        retries = 0
+        while retries <= max_retries:
+            try:
+                await self._run()
+            except (aio_pika.exceptions.AMQPConnectionError, aio_pika.exceptions.AMQPChannelError) as e:
+                logger.error(f'Error connecting to RabbitMQ: {e}')
+                retries += 1
+                if retries <= max_retries:
+                    logger.info(f'Retrying in {retry_delay} seconds...')
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error('Max retries exceeded, giving up')
+                    break
+
+    async def _run(self):
+        channel = await self.get_channel()
+        await channel.set_qos(prefetch_count=self._prefetch_count)
+        await self._run_routines(channel)
+
+        for routing_key, event in self._router.handlers.items():
+            queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
+            queue = await channel.declare_queue(
+                queue_name,
+                durable=True,
+                arguments={
+                    'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
+                    'x-dead-letter-routing-key': DEAD_LETTER_QUEUE_NAME,
+                },
+            )
+
+            if _exchange := event.exchange:
+                exchange = await channel.declare_exchange(**_exchange.as_dict(exclude_none=True))
+                await queue.bind(exchange=exchange, routing_key=routing_key)
+
+            consumer = partial(
+                self._on_message,
+                handler=event.handler,
+                requeue=event.requeue,
+                reject_on_redelivered=event.reject_on_redelivered,
+                ignore_processed=event.ignore_processed,
+            )
+            await queue.consume(consumer)
+            logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {routing_key}')
+
+        try:
             await asyncio.Future()
-        except Exception as exc:
-            logger.error(f'Exception occured | error: {exc}')
-            raise exc
-        finally:
-            await self.disconnect()
+        except asyncio.CancelledError as error:
+            logger.error('Consumer cancelled')
+            raise error
+
+    async def _on_message(
+        self,
+        *,
+        handler: callable,
+        message: aio_pika.IncomingMessage,
+        requeue: bool,
+        reject_on_redelivered: bool,
+        ignore_processed: bool,
+    ):
+        async with message.process(requeue, reject_on_redelivered, ignore_processed):
+            await handler(message)
+
+    async def _run_routines(self, channel: aio_pika.Channel):
+        await asyncio.gather(
+            self._declare_unroutable_queue(channel),
+            self._declare_dead_letter_exchange(channel),
+            return_exceptions=True,
+        )
