@@ -3,7 +3,6 @@ import time
 from functools import partial
 
 import aio_pika
-from pika import exceptions as pika_exceptions
 from pika.adapters.blocking_connection import BlockingChannel
 
 
@@ -16,7 +15,7 @@ except ImportError:
 
 
 from zimran.events.connection import AsyncConnection, Connection
-from zimran.events.constants import DEAD_LETTER_QUEUE_NAME, DEFAULT_DEAD_LETTER_EXCHANGE_NAME
+from zimran.events.constants import DEFAULT_DEAD_LETTER_EXCHANGE_NAME
 from zimran.events.router import Router
 from zimran.events.utils import cleanup_and_normalize_queue_name
 
@@ -42,7 +41,7 @@ class Consumer(Connection):
         while retries <= max_retries:
             try:
                 self._run()
-            except (pika_exceptions.AMQPConnectionError, pika_exceptions.AMQPChannelError) as e:
+            except Exception as e:
                 logger.error(f'Error connecting to RabbitMQ: {e}')
                 retries += 1
                 if retries <= max_retries:
@@ -62,10 +61,7 @@ class Consumer(Connection):
             channel.queue_declare(
                 queue_name,
                 durable=True,
-                arguments={
-                    'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
-                    'x-dead-letter-routing-key': DEAD_LETTER_QUEUE_NAME,
-                },
+                arguments={'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME},
             )
 
             if exchange := event.exchange:
@@ -106,7 +102,10 @@ class AsyncConsumer(AsyncConnection):
         while retries <= max_retries:
             try:
                 await self._run()
-            except (aio_pika.exceptions.AMQPConnectionError, aio_pika.exceptions.AMQPChannelError) as e:
+            except asyncio.CancelledError as e:
+                logger.error(f'Consumer cancelled: {e}')
+                break
+            except Exception as e:
                 logger.error(f'Error connecting to RabbitMQ: {e}')
                 retries += 1
                 if retries <= max_retries:
@@ -126,10 +125,7 @@ class AsyncConsumer(AsyncConnection):
             queue = await channel.declare_queue(
                 queue_name,
                 durable=True,
-                arguments={
-                    'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
-                    'x-dead-letter-routing-key': DEAD_LETTER_QUEUE_NAME,
-                },
+                arguments={'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME},
             )
 
             if _exchange := event.exchange:
