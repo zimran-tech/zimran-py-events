@@ -7,8 +7,9 @@ class AsyncProducerSingleton:
 
     @classmethod
     async def connect(cls, broker_url: str):
-        cls._producer = AsyncProducer(broker_url=broker_url)
-        await cls._producer.connect()
+        if cls._producer is None:
+            cls._producer = AsyncProducer(broker_url=broker_url)
+            await cls._producer.connect()
 
     @classmethod
     async def disconnect(cls):
@@ -38,8 +39,9 @@ class ProducerSingleton:
 
     @classmethod
     def connect(cls, broker_url: str):
-        cls._producer = Producer(broker_url=broker_url)
-        cls._producer.connect()
+        if cls._producer is None:
+            cls._producer = Producer(broker_url=broker_url)
+            cls._producer.connect()
 
     @classmethod
     def disconnect(cls):

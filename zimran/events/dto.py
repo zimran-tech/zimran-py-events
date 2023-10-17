@@ -2,6 +2,8 @@ import datetime
 import uuid
 from dataclasses import asdict, dataclass
 
+from zimran.events.utils import validate_exchange
+
 
 class Base:
     def as_dict(self, exclude: list | None = None, exclude_none: bool = False) -> dict:
@@ -51,3 +53,17 @@ class ChannelProperties(Base):
 
         if self.headers is None:
             self.headers = {}
+
+
+@dataclass(kw_only=True)
+class EventHandler(Base):
+    exchange: Exchange | None = None
+    handler: callable
+
+    requeue: bool = False
+    reject_on_redelivered: bool = False
+    ignore_processed: bool = False
+
+    def __post_init__(self):
+        if self.exchange is not None:
+            validate_exchange(self.exchange)
