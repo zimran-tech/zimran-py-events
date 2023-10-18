@@ -72,7 +72,13 @@ class Consumer(Connection):
                 )
                 channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=routing_key)
 
-            channel.basic_consume(queue_name, event.handler)
+            consumer = partial(
+                self._on_message,
+                event.handler,
+                requeue=event.requeue,
+                reject_on_redelivered=event.reject_on_redelivered,
+            )
+            channel.basic_consume(queue_name, consumer)
             logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {routing_key}')
 
         channel.start_consuming()
@@ -83,11 +89,12 @@ class Consumer(Connection):
 
     def _on_message(
         self,
-        handler: callable,
         channel,
         method,
         properties,
         body,
+        *,
+        handler: callable,
         requeue: bool,
         reject_on_redelivered: bool,
         ignore_processed: bool,
@@ -181,8 +188,9 @@ class AsyncConsumer(AsyncConnection):
 
     async def _on_message(
         self,
-        handler: callable,
         message: aio_pika.IncomingMessage,
+        *,
+        handler: callable,
         requeue: bool,
         reject_on_redelivered: bool,
         ignore_processed: bool,
