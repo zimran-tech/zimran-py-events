@@ -72,7 +72,14 @@ class Consumer(Connection):
                 )
                 channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=routing_key)
 
-            channel.basic_consume(queue_name, event.handler)
+            consumer = partial(
+                self._on_message,
+                handler=event.handler,
+                requeue=event.requeue,
+                reject_on_redelivered=event.reject_on_redelivered,
+                ignore_processed=event.ignore_processed,
+            )
+            channel.basic_consume(queue_name, consumer)
             logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {routing_key}')
 
         channel.start_consuming()
@@ -83,24 +90,25 @@ class Consumer(Connection):
 
     def _on_message(
         self,
-        handler: callable,
         channel,
         method,
         properties,
         body,
+        *,
+        handler: callable,
         requeue: bool,
         reject_on_redelivered: bool,
         ignore_processed: bool,
     ):
         if method.redelivered and reject_on_redelivered:
             channel.basic_reject(delivery_tag=method.delivery_tag, requeue=False)
-            logger.info('Message rejected because it was redelivered')
+            logger.info(f'Message rejected because it was redelivered | handler: {handler.__name__}')
             return
 
         try:
             handler(channel, method, properties, body)
         except Exception as e:
-            logger.error(f'Error in handler: {e}')
+            logger.error(f'Error in handler: {e} | handler: {handler.__name__}')
             if requeue:
                 channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
                 logger.info('Message requeued')
@@ -181,8 +189,9 @@ class AsyncConsumer(AsyncConnection):
 
     async def _on_message(
         self,
-        handler: callable,
         message: aio_pika.IncomingMessage,
+        *,
+        handler: callable,
         requeue: bool,
         reject_on_redelivered: bool,
         ignore_processed: bool,

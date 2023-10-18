@@ -65,20 +65,18 @@ class EventHandler(Base):
     :param requeue: Requeue message when exception.
 
     :param reject_on_redelivered:
-        When True message will be rejected only when
-        message was redelivered.
+        When True message will be rejected only when message was redelivered.
 
     :param ignore_processed:
-        Do nothing if message already processed. When
-        ignore_processed=True you may reject or ack message manually
+        Whenignore_processed=True you may reject or ack message manually
     """
 
     exchange: Exchange | None = None
     handler: callable
 
     requeue: bool = True
-    reject_on_redelivered: bool = False
-    ignore_processed: bool = False
+    reject_on_redelivered: bool = True
+    ignore_processed: bool = True
 
     def __post_init__(self):
         if self.exchange is not None and not isinstance(self.exchange, Exchange):
