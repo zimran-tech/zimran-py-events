@@ -62,7 +62,7 @@ class Consumer(Connection):
                 durable=True,
                 arguments={
                     'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
-                    'x-ha-policy': 'exactly 2',
+                    'x-queue-type': event.queue_type,
                 },
             )
 
@@ -80,8 +80,8 @@ class Consumer(Connection):
         channel.start_consuming()
 
     def _run_routines(self, channel: BlockingChannel):
-        self._declare_unroutable_queue(channel)
-        self._declare_dead_letter_exchange(channel)
+        self._declare_unroutable(channel)
+        self._declare_dead_letter(channel)
 
 
 class AsyncConsumer(AsyncConnection):
@@ -130,7 +130,7 @@ class AsyncConsumer(AsyncConnection):
                 durable=True,
                 arguments={
                     'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
-                    'x-ha-policy': 'exactly 2',
+                    'x-queue-type': event.queue_type,
                 },
             )
 
@@ -149,7 +149,7 @@ class AsyncConsumer(AsyncConnection):
 
     async def _run_routines(self, channel: aio_pika.Channel):
         await asyncio.gather(
-            self._declare_unroutable_queue(channel),
-            self._declare_dead_letter_exchange(channel),
+            self._declare_unroutable(channel),
+            self._declare_dead_letter(channel),
             return_exceptions=True,
         )
