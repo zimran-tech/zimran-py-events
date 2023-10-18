@@ -57,10 +57,26 @@ class ChannelProperties(Base):
 
 @dataclass(kw_only=True)
 class EventHandler(Base):
+    """
+    :param exchange: Exchange for event.
+
+    :param handler: Callable that will be called when event received.
+
+    :param requeue: Requeue message when exception.
+
+    :param reject_on_redelivered:
+        When True message will be rejected only when
+        message was redelivered.
+
+    :param ignore_processed:
+        Do nothing if message already processed. When
+        ignore_processed=True you may reject or ack message manually
+    """
+
     exchange: Exchange | None = None
     handler: callable
 
-    requeue: bool = False
+    requeue: bool = True
     reject_on_redelivered: bool = False
     ignore_processed: bool = False
 
