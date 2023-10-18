@@ -74,9 +74,10 @@ class Consumer(Connection):
 
             consumer = partial(
                 self._on_message,
-                event.handler,
+                handler=event.handler,
                 requeue=event.requeue,
                 reject_on_redelivered=event.reject_on_redelivered,
+                ignore_processed=event.ignore_processed,
             )
             channel.basic_consume(queue_name, consumer)
             logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {routing_key}')
