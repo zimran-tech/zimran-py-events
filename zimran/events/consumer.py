@@ -102,13 +102,13 @@ class Consumer(Connection):
     ):
         if method.redelivered and reject_on_redelivered:
             channel.basic_reject(delivery_tag=method.delivery_tag, requeue=False)
-            logger.info('Message rejected because it was redelivered')
+            logger.info(f'Message rejected because it was redelivered | handler: {handler.__name__}')
             return
 
         try:
             handler(channel, method, properties, body)
         except Exception as e:
-            logger.error(f'Error in handler: {e}')
+            logger.error(f'Error in handler: {e} | handler: {handler.__name__}')
             if requeue:
                 channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
                 logger.info('Message requeued')
