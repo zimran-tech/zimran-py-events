@@ -60,7 +60,10 @@ class Consumer(Connection):
             channel.queue_declare(
                 queue_name,
                 durable=True,
-                arguments={'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME},
+                arguments={
+                    'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
+                    'x-ha-policy': 'exactly 2',
+                },
             )
 
             if exchange := event.exchange:
@@ -125,7 +128,10 @@ class AsyncConsumer(AsyncConnection):
             queue = await channel.declare_queue(
                 queue_name,
                 durable=True,
-                arguments={'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME},
+                arguments={
+                    'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
+                    'x-ha-policy': 'exactly 2',
+                },
             )
 
             if _exchange := event.exchange:
