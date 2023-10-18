@@ -30,6 +30,8 @@ await producer.publish('some.event.routing', {'msg': 'hello, world'})
 
 ```python
 
+# < 0.4.0
+
 from zimran.events import Consumer
 from zimran.events.dto import Exchange
 
@@ -54,6 +56,30 @@ consumer = Consumer(service_name='my-service', broker_url='')
 def handler_func(**kwargs):
   ...
 
+
+
+# >= 0.4.0 version
+
+
+from zimran.events.routing import Router
+from zimran.events.consumer AsyncConsumer
+
+
+router = Router()
+
+@router.event_handler('routing-key')
+async def handler(message: aio_pika.IncomingMessage):
+  pass
+
+
+router.add_event_handler('routing-key', some_handler)
+
+
+
+async def main():
+  consumer = AsyncConsumer(..., router=router)
+
+  await consumer.run()
 ```
 
 ## Code

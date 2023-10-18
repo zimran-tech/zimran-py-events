@@ -1,7 +1,7 @@
 import aio_pika
 import pika
 from aioretry import retry
-from pika.adapters.blocking_connection import BlockingChannel
+from pika.adapters.blocking_connection import BlockingChannel, BlockingConnection
 
 from zimran.events.constants import (
     DEAD_LETTER_QUEUE_NAME,
@@ -22,11 +22,11 @@ except ImportError:
 
 class Connection:
     def __init__(self, *, broker_url: str, channel_number: int = 1):
-        self._url = broker_url
+        self._url: str = broker_url
 
-        self._connection = None
-        self._channel = None
-        self._channel_number = channel_number
+        self._connection: BlockingConnection = None
+        self._channel: BlockingChannel = None
+        self._channel_number: int = channel_number
 
     def __enter__(self):
         self.connect()

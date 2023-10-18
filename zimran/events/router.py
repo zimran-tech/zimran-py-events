@@ -12,43 +12,28 @@ class Router:
             if not isinstance(handler, EventHandler):
                 raise TypeError('Event handler must be instance of EventHandler')
 
-    def handle_event(
-        self,
-        name: str,
-        *,
-        exchange: Exchange | None = None,
-        requeue: bool = False,
-        reject_on_redelivered: bool = False,
-        ignore_processed: bool = False,
-    ):
+    def handle_event(self, name: str, *, exchange: Exchange | None = None, **kwargs):
+        """
+        :param name: Event name(Routing key) for which handler will be called.
+        :param exchange: Exchange for event.
+
+        :param kwargs: EventHandler params. See EventHandler class for more info.
+        """
+
         def wrapper(func):
-            self.__event_handlers[name] = EventHandler(
-                exchange=exchange,
-                handler=func,
-                requeue=requeue,
-                reject_on_redelivered=reject_on_redelivered,
-                ignore_processed=ignore_processed,
-            )
+            self.__event_handlers[name] = EventHandler(exchange=exchange, handler=func, **kwargs)
 
         return wrapper
 
-    def add_event_handler(
-        self,
-        name: str,
-        handler: callable,
-        *,
-        exchange: Exchange | None = None,
-        requeue: bool = False,
-        reject_on_redelivered: bool = False,
-        ignore_processed: bool = False,
-    ):
-        self.__event_handlers[name] = EventHandler(
-            exchange=exchange,
-            handler=handler,
-            requeue=requeue,
-            reject_on_redelivered=reject_on_redelivered,
-            ignore_processed=ignore_processed,
-        )
+    def add_event_handler(self, name: str, handler: callable, *, exchange: Exchange | None = None, **kwargs):
+        """
+        :param name: Event name(Routing key) for which handler will be called.
+        :param exchange: Exchange for event.
+
+        :param kwargs: EventHandler params. See EventHandler class for more info.
+        """
+
+        self.__event_handlers[name] = EventHandler(exchange=exchange, handler=handler, **kwargs)
 
     @property
     def handlers(self) -> dict[str, EventHandler]:
