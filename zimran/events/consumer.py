@@ -181,7 +181,6 @@ class AsyncConsumer(AsyncConnection):
 
     async def _on_message(
         self,
-        *,
         handler: callable,
         message: aio_pika.IncomingMessage,
         requeue: bool,
