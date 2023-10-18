@@ -1,6 +1,7 @@
 import datetime
 import uuid
 from dataclasses import asdict, dataclass
+from typing import Literal
 
 from .exceptions import ExchangeTypeError
 
@@ -65,7 +66,11 @@ class EventHandler(Base):
 
     exchange: Exchange | None = None
     handler: callable
+    queue_type: Literal['quorum', 'classic'] = 'quorum'
 
     def __post_init__(self):
         if self.exchange is not None and not isinstance(self.exchange, Exchange):
-            raise ExchangeTypeError('ExchangeTypeError: <exchange> must be instance of <Exchange>')
+            raise ExchangeTypeError('ExchangeTypeError: <exchange> must be instance of <zimran.events.dto.Exchange>')
+
+        if self.queue_type not in ('quorum', 'classic'):
+            raise ValueError('Invalid queue type: <queue_type> must be "quorum" or "classic" but not {self.queue_type}')
