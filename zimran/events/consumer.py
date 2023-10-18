@@ -1,6 +1,5 @@
 import asyncio
 import time
-from functools import partial
 
 import aio_pika
 from pika.adapters.blocking_connection import BlockingChannel
@@ -72,14 +71,7 @@ class Consumer(Connection):
                 )
                 channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=routing_key)
 
-            consumer = partial(
-                self._on_message,
-                handler=event.handler,
-                requeue=event.requeue,
-                reject_on_redelivered=event.reject_on_redelivered,
-                ignore_processed=event.ignore_processed,
-            )
-            channel.basic_consume(queue_name, consumer)
+            channel.basic_consume(queue_name, event.handler)
             logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {routing_key}')
 
         channel.start_consuming()
@@ -87,37 +79,6 @@ class Consumer(Connection):
     def _run_routines(self, channel: BlockingChannel):
         self._declare_unroutable_queue(channel)
         self._declare_dead_letter_exchange(channel)
-
-    def _on_message(
-        self,
-        channel,
-        method,
-        properties,
-        body,
-        *,
-        handler: callable,
-        requeue: bool,
-        reject_on_redelivered: bool,
-        ignore_processed: bool,
-    ):
-        if method.redelivered and reject_on_redelivered:
-            channel.basic_reject(delivery_tag=method.delivery_tag, requeue=False)
-            logger.info(f'Message rejected because it was redelivered | handler: {handler.__name__}')
-            return
-
-        try:
-            handler(channel, method, properties, body)
-        except Exception as e:
-            logger.error(f'Error in handler: {e} | handler: {handler.__name__}')
-            if requeue:
-                channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-                logger.info('Message requeued')
-            else:
-                channel.basic_ack(delivery_tag=method.delivery_tag)
-
-        if not ignore_processed:
-            channel.basic_ack(delivery_tag=method.delivery_tag)
-            logger.info('Message processed')
 
 
 class AsyncConsumer(AsyncConnection):
@@ -171,14 +132,7 @@ class AsyncConsumer(AsyncConnection):
                 exchange = await channel.declare_exchange(**_exchange.as_dict(exclude_none=True))
                 await queue.bind(exchange=exchange, routing_key=routing_key)
 
-            consumer = partial(
-                self._on_message,
-                handler=event.handler,
-                requeue=event.requeue,
-                reject_on_redelivered=event.reject_on_redelivered,
-                ignore_processed=event.ignore_processed,
-            )
-            await queue.consume(consumer)
+            await queue.consume(event.handler)
             logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {routing_key}')
 
         try:
@@ -186,18 +140,6 @@ class AsyncConsumer(AsyncConnection):
         except asyncio.CancelledError as error:
             logger.error('Consumer cancelled')
             raise error
-
-    async def _on_message(
-        self,
-        message: aio_pika.IncomingMessage,
-        *,
-        handler: callable,
-        requeue: bool,
-        reject_on_redelivered: bool,
-        ignore_processed: bool,
-    ):
-        async with message.process(requeue, reject_on_redelivered, ignore_processed):
-            await handler(message)
 
     async def _run_routines(self, channel: aio_pika.Channel):
         await asyncio.gather(

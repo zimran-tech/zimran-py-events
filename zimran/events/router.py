@@ -12,28 +12,14 @@ class Router:
             if not isinstance(handler, EventHandler):
                 raise TypeError('Event handler must be instance of EventHandler')
 
-    def handle_event(self, name: str, *, exchange: Exchange | None = None, **kwargs):
-        """
-        :param name: Event name(Routing key) for which handler will be called.
-        :param exchange: Exchange for event.
-
-        :param kwargs: EventHandler params. See EventHandler class for more info.
-        """
-
+    def handle_event(self, name: str, *, exchange: Exchange | None = None):
         def wrapper(func):
-            self.__event_handlers[name] = EventHandler(exchange=exchange, handler=func, **kwargs)
+            self.__event_handlers[name] = EventHandler(exchange=exchange, handler=func)
 
         return wrapper
 
-    def add_event_handler(self, name: str, handler: callable, *, exchange: Exchange | None = None, **kwargs):
-        """
-        :param name: Event name(Routing key) for which handler will be called.
-        :param exchange: Exchange for event.
-
-        :param kwargs: EventHandler params. See EventHandler class for more info.
-        """
-
-        self.__event_handlers[name] = EventHandler(exchange=exchange, handler=handler, **kwargs)
+    def add_event_handler(self, name: str, handler: callable, *, exchange: Exchange | None = None):
+        self.__event_handlers[name] = EventHandler(exchange=exchange, handler=handler)
 
     @property
     def handlers(self) -> dict[str, EventHandler]:
