@@ -81,11 +81,7 @@ class Connection:
         channel.exchange_declare(
             exchange=exchange.name,
             exchange_type=exchange.type,
-            durable=exchange.durable,
-            internal=exchange.internal,
-            passive=exchange.passive,
-            auto_delete=exchange.auto_delete,
-            arguments=exchange.arguments,
+            **exchange.as_dict(exclude_none=True, exclude=['name', 'type', 'timeout']),
         )
 
     def declare_queue(self, channel: BlockingChannel, *, name: str, **kwargs):
@@ -154,11 +150,7 @@ class AsyncConnection:
     async def declare_exchange(self, channel: AbstractRobustChannel, exchange: Exchange):
         exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
-        declared_exchange = await channel.declare_exchange(
-            exchange.name,
-            exchange.type,
-            **exchange.as_dict(exclude_none=True),
-        )
+        declared_exchange = await channel.declare_exchange(**exchange.as_dict(exclude_none=True))
 
         return declared_exchange
 
