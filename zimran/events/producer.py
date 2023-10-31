@@ -84,7 +84,7 @@ class AsyncProducer(AsyncConnection):
 
         validate_exchange(exchange)
 
-        declared_exchange = await self.declare_exchange(channel=channel, exchange=exchange)
+        declared_exchange = await self.declare_exchange(channel, exchange)
 
         await declared_exchange.publish(message=message, routing_key=routing_key)
 
