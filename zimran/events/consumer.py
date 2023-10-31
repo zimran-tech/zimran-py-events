@@ -14,7 +14,7 @@ except ImportError:
 
 
 from zimran.events.connection import AsyncConnection, Connection
-from zimran.events.constants import DEFAULT_DEAD_LETTER_EXCHANGE_NAME
+from zimran.events.constants import DEFAULT_DEAD_LETTER_EXCHANGE_NAME, UNROUTABLE_EXCHANGE_NAME
 from zimran.events.router import Router
 from zimran.events.utils import cleanup_and_normalize_queue_name
 
@@ -71,6 +71,9 @@ class Consumer(Connection):
                     exchange=exchange.name,
                     exchange_type=exchange.type,
                     **exchange.as_dict(exclude=['name', 'type', 'timeout']),
+                    arguments={
+                        'x-alternate-exchange': UNROUTABLE_EXCHANGE_NAME,
+                    },
                 )
                 channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=routing_key)
 
@@ -135,7 +138,12 @@ class AsyncConsumer(AsyncConnection):
             )
 
             if _exchange := event.exchange:
-                exchange = await channel.declare_exchange(**_exchange.as_dict(exclude_none=True))
+                exchange = await channel.declare_exchange(
+                    **_exchange.as_dict(exclude_none=True),
+                    arguments={
+                        'x-alternate-exchange': UNROUTABLE_EXCHANGE_NAME,
+                    },
+                )
                 await queue.bind(exchange=exchange, routing_key=routing_key)
 
             await queue.consume(event.handler)

@@ -36,7 +36,10 @@ class Producer(Connection):
             validate_channel_properties(properties)
 
         basic_properties = pika.BasicProperties(**properties.as_dict(exclude_none=True))
-        body = json.dumps(payload, default=str)
+        if isinstance(payload, dict):
+            body = json.dumps(payload, default=str)
+        else:
+            body = payload
 
         channel = self.get_channel()
         if exchange is None:
@@ -96,4 +99,9 @@ class AsyncProducer(AsyncConnection):
 
     @staticmethod
     def _get_message(properties: ChannelProperties, payload: dict):
-        return aio_pika.Message(body=json.dumps(payload, default=str).encode(), **properties.as_dict(exclude_none=True))
+        if isinstance(payload, dict):
+            body = json.dumps(payload, default=str)
+        else:
+            body = payload
+
+        return aio_pika.Message(body=body.encode(), **properties.as_dict(exclude_none=True))

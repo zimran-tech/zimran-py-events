@@ -65,12 +65,12 @@ class Connection:
 
     def _declare_unroutable(self, channel: BlockingChannel):
         channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
-        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True)
+        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
         channel.queue_bind(queue=UNROUTABLE_QUEUE_NAME, exchange=UNROUTABLE_EXCHANGE_NAME, routing_key='')
 
     def _declare_dead_letter(self, channel: BlockingChannel):
         channel.exchange_declare(exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, exchange_type='fanout', durable=True)
-        channel.queue_declare(queue=DEAD_LETTER_QUEUE_NAME, durable=True)
+        channel.queue_declare(queue=DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
         channel.queue_bind(queue=DEAD_LETTER_QUEUE_NAME, exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, routing_key='')
 
 
@@ -120,14 +120,10 @@ class AsyncConnection:
 
     async def _declare_unroutable(self, channel: aio_pika.abc.AbstractRobustChannel):
         exchange = await channel.declare_exchange(UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
-
         queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
-
         await queue.bind(exchange=exchange, routing_key='')
 
     async def _declare_dead_letter(self, channel: aio_pika.abc.AbstractRobustChannel):
         exchange = await channel.declare_exchange(DEFAULT_DEAD_LETTER_EXCHANGE_NAME, type='fanout', durable=True)
-
         queue = await channel.declare_queue(DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
-
         await queue.bind(exchange=exchange, routing_key='')
