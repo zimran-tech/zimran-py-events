@@ -1,4 +1,5 @@
 import asyncio
+import copy
 
 import pika
 from aio_pika import connect_robust
@@ -70,13 +71,16 @@ class Connection:
         logger.info('AMQP Connection disconnected')
 
     def declare_exchange(self, channel: BlockingChannel, exchange: Exchange):
-        exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
+        arguments = copy.deepcopy(exchange.arguments)
+        arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
         channel.exchange_declare(
             exchange=exchange.name_with_version,
             exchange_type=exchange.type,
-            **exchange.as_dict(exclude_none=True, exclude=['name', 'type', 'timeout', 'version']),
+            arguments=arguments,
+            **exchange.as_dict(exclude_none=True, exclude=['arguments', 'name', 'type', 'timeout', 'version']),
         )
+
         logger.info(f'Exchange {exchange.name_with_version} declared')
 
     def declare_queue(self, channel: BlockingChannel, *, name: str, **kwargs):
@@ -157,12 +161,15 @@ class AsyncConnection:
         logger.info('AMQP Connection disconnected')
 
     async def declare_exchange(self, channel: AbstractRobustChannel, exchange: Exchange):
-        exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
+        arguments = copy.deepcopy(exchange.arguments)
+        arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
         declared_exchange = await channel.declare_exchange(
             name=exchange.name_with_version,
-            **exchange.as_dict(exclude_none=True, exclude=['version', 'name']),
+            arguments=arguments,
+            **exchange.as_dict(exclude_none=True, exclude=['arguments', 'name', 'version']),
         )
+
         logger.info(f'Exchange {exchange.name_with_version} declared')
 
         return declared_exchange
