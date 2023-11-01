@@ -79,10 +79,11 @@ class Connection:
         exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
         channel.exchange_declare(
-            exchange=exchange.name,
+            exchange=f'{exchange.name}.{exchange.version}',
             exchange_type=exchange.type,
-            **exchange.as_dict(exclude_none=True, exclude=['name', 'type', 'timeout']),
+            **exchange.as_dict(exclude_none=True, exclude=['name', 'type', 'timeout', 'version']),
         )
+        logger.info(f'Exchange {exchange.name} declared')
 
     def declare_queue(self, channel: BlockingChannel, *, name: str, **kwargs):
         arguments: dict = kwargs.pop('arguments', {})
@@ -91,6 +92,7 @@ class Connection:
 
         kwargs.setdefault('durable', True)
         channel.queue_declare(queue=name, **kwargs)
+        logger.info(f'Queue {name} declared')
 
 
 class AsyncConnection:
@@ -150,7 +152,8 @@ class AsyncConnection:
     async def declare_exchange(self, channel: AbstractRobustChannel, exchange: Exchange):
         exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
-        declared_exchange = await channel.declare_exchange(**exchange.as_dict(exclude_none=True))
+        declared_exchange = await channel.declare_exchange(**exchange.as_dict(exclude_none=True, exclude=['version']))
+        logger.info(f'Exchange {exchange.name} declared')
 
         return declared_exchange
 
@@ -161,4 +164,7 @@ class AsyncConnection:
 
         kwargs.setdefault('durable', True)
 
-        return await channel.declare_queue(name, **kwargs)
+        declared_queue = await channel.declare_queue(name, **kwargs)
+        logger.info(f'Queue {name} declared')
+
+        return declared_queue
