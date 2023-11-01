@@ -52,7 +52,6 @@ class Consumer(Connection):
     def _run(self):
         channel: BlockingChannel = self.get_channel()
         channel.basic_qos(prefetch_count=self._prefetch_count)
-        self._run_routines(channel)
 
         for routing_key, event in self._router.handlers.items():
             queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
@@ -66,10 +65,6 @@ class Consumer(Connection):
             logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {routing_key}')
 
         channel.start_consuming()
-
-    def _run_routines(self, channel: BlockingChannel):
-        self._declare_unroutable(channel)
-        self._declare_dead_letter(channel)
 
 
 class AsyncConsumer(AsyncConnection):
@@ -109,7 +104,6 @@ class AsyncConsumer(AsyncConnection):
     async def _run(self):
         channel: AbstractRobustChannel = await self.get_channel()
         await channel.set_qos(prefetch_count=self._prefetch_count)
-        await self._run_routines(channel)
 
         for routing_key, event in self._router.handlers.items():
             queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
@@ -127,10 +121,3 @@ class AsyncConsumer(AsyncConnection):
         except asyncio.CancelledError as error:
             logger.error('Consumer cancelled')
             raise error
-
-    async def _run_routines(self, channel: AbstractRobustChannel):
-        await asyncio.gather(
-            self._declare_unroutable(channel),
-            self._declare_dead_letter(channel),
-            return_exceptions=True,
-        )
