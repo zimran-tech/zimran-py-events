@@ -56,7 +56,9 @@ class Connection:
 
     def connect(self):
         self._channel = self.connection.channel(channel_number=self._channel_number)
-        logger.info('Channel connection established')
+        logger.info('Connection established')
+
+        self._run_routines(self._channel)
 
     def disconnect(self):
         if self._channel is not None and self._channel.is_open:
@@ -138,7 +140,9 @@ class AsyncConnection:
     @retry(retry_policy)
     async def connect(self):
         self._channel = await (await self.connection).channel(channel_number=self._channel_number)
-        logger.info('Channel connection established')
+        logger.info('Connection established')
+
+        await self._run_routines(self._channel)
 
     async def disconnect(self):
         if self._channel is not None and not self._channel.is_closed:

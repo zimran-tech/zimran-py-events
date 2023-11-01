@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 import aio_pika
@@ -52,8 +51,6 @@ class Producer(Connection):
 
         self.declare_exchange(channel=channel, exchange=exchange)
 
-        self._run_routines(channel)
-
         channel.basic_publish(exchange=exchange.name, routing_key=routing_key, body=body, properties=basic_properties)
 
         logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
@@ -87,10 +84,7 @@ class AsyncProducer(AsyncConnection):
 
         validate_exchange(exchange)
 
-        declared_exchange, *_ = await asyncio.gather(
-            self.declare_exchange(channel, exchange),
-            self._run_routines(channel),
-        )
+        declared_exchange = await self.declare_exchange(channel, exchange)
 
         await declared_exchange.publish(message=message, routing_key=routing_key)
 
