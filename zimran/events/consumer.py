@@ -70,7 +70,6 @@ class Consumer(Connection):
     def _run_routines(self, channel: BlockingChannel):
         self._declare_unroutable(channel)
         self._declare_dead_letter(channel)
-        logger.info('Unrouteable and dead letter queues declared')
 
 
 class AsyncConsumer(AsyncConnection):
@@ -135,5 +134,3 @@ class AsyncConsumer(AsyncConnection):
             self._declare_dead_letter(channel),
             return_exceptions=True,
         )
-
-        logger.info('Unrouteable and dead letter queues declared')
