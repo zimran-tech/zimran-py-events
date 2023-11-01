@@ -67,10 +67,6 @@ class Consumer(Connection):
 
         channel.start_consuming()
 
-    def _run_routines(self, channel: BlockingChannel):
-        self._declare_unroutable(channel)
-        self._declare_dead_letter(channel)
-
 
 class AsyncConsumer(AsyncConnection):
     def __init__(
@@ -127,10 +123,3 @@ class AsyncConsumer(AsyncConnection):
         except asyncio.CancelledError as error:
             logger.error('Consumer cancelled')
             raise error
-
-    async def _run_routines(self, channel: AbstractRobustChannel):
-        await asyncio.gather(
-            self._declare_unroutable(channel),
-            self._declare_dead_letter(channel),
-            return_exceptions=True,
-        )

@@ -1,3 +1,5 @@
+import asyncio
+
 import pika
 from aio_pika import connect_robust
 from aio_pika.abc import AbstractRobustChannel, AbstractRobustConnection
@@ -65,20 +67,6 @@ class Connection:
 
         logger.info('AMQP Connection disconnected')
 
-    def _declare_unroutable(self, channel: BlockingChannel):
-        channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
-        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
-        channel.queue_bind(queue=UNROUTABLE_QUEUE_NAME, exchange=UNROUTABLE_EXCHANGE_NAME, routing_key='')
-
-        logger.info('Unrouteable exchange and queue declared')
-
-    def _declare_dead_letter(self, channel: BlockingChannel):
-        channel.exchange_declare(exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, exchange_type='fanout', durable=True)
-        channel.queue_declare(queue=DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
-        channel.queue_bind(queue=DEAD_LETTER_QUEUE_NAME, exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, routing_key='')
-
-        logger.info('Dead letter exchange and queue declared')
-
     def declare_exchange(self, channel: BlockingChannel, exchange: Exchange):
         exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
@@ -97,6 +85,24 @@ class Connection:
         kwargs.setdefault('durable', True)
         channel.queue_declare(queue=name, arguments=arguments, **kwargs)
         logger.info(f'Queue {name} declared')
+
+    def _declare_unroutable(self, channel: BlockingChannel):
+        channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
+        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
+        channel.queue_bind(queue=UNROUTABLE_QUEUE_NAME, exchange=UNROUTABLE_EXCHANGE_NAME, routing_key='')
+
+        logger.info('Unrouteable exchange and queue declared')
+
+    def _declare_dead_letter(self, channel: BlockingChannel):
+        channel.exchange_declare(exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, exchange_type='fanout', durable=True)
+        channel.queue_declare(queue=DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
+        channel.queue_bind(queue=DEAD_LETTER_QUEUE_NAME, exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, routing_key='')
+
+        logger.info('Dead letter exchange and queue declared')
+
+    def _run_routines(self, channel: BlockingChannel):
+        self._declare_unroutable(channel)
+        self._declare_dead_letter(channel)
 
 
 class AsyncConnection:
@@ -143,20 +149,6 @@ class AsyncConnection:
 
         logger.info('AMQP Connection disconnected')
 
-    async def _declare_unroutable(self, channel: AbstractRobustChannel):
-        exchange = await channel.declare_exchange(UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
-        queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
-        await queue.bind(exchange=exchange, routing_key='')
-
-        logger.info('Unrouteable exchange and queue declared')
-
-    async def _declare_dead_letter(self, channel: AbstractRobustChannel):
-        exchange = await channel.declare_exchange(DEFAULT_DEAD_LETTER_EXCHANGE_NAME, type='fanout', durable=True)
-        queue = await channel.declare_queue(DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
-        await queue.bind(exchange=exchange, routing_key='')
-
-        logger.info('Dead letter exchange and queue declared')
-
     async def declare_exchange(self, channel: AbstractRobustChannel, exchange: Exchange):
         exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
@@ -179,3 +171,24 @@ class AsyncConnection:
         logger.info(f'Queue {name} declared')
 
         return declared_queue
+
+    async def _declare_unroutable(self, channel: AbstractRobustChannel):
+        exchange = await channel.declare_exchange(UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
+        queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
+        await queue.bind(exchange=exchange, routing_key='')
+
+        logger.info('Unrouteable exchange and queue declared')
+
+    async def _declare_dead_letter(self, channel: AbstractRobustChannel):
+        exchange = await channel.declare_exchange(DEFAULT_DEAD_LETTER_EXCHANGE_NAME, type='fanout', durable=True)
+        queue = await channel.declare_queue(DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
+        await queue.bind(exchange=exchange, routing_key='')
+
+        logger.info('Dead letter exchange and queue declared')
+
+    async def _run_routines(self, channel: AbstractRobustChannel):
+        await asyncio.gather(
+            self._declare_unroutable(channel),
+            self._declare_dead_letter(channel),
+            return_exceptions=True,
+        )
