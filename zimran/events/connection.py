@@ -73,11 +73,11 @@ class Connection:
         exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
         channel.exchange_declare(
-            exchange=f'{exchange.name}.{exchange.version}',
+            exchange=exchange.name_with_version,
             exchange_type=exchange.type,
             **exchange.as_dict(exclude_none=True, exclude=['name', 'type', 'timeout', 'version']),
         )
-        logger.info(f'Exchange {exchange.name} declared')
+        logger.info(f'Exchange {exchange.name_with_version} declared')
 
     def declare_queue(self, channel: BlockingChannel, *, name: str, **kwargs):
         arguments: dict = kwargs.pop('arguments', {})
@@ -90,7 +90,10 @@ class Connection:
 
     def _declare_unroutable(self, channel: BlockingChannel):
         channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
-        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
+
+        arguments = {'x-queue-type': 'quorum', 'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME}
+        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True, arguments=arguments)
+
         channel.queue_bind(queue=UNROUTABLE_QUEUE_NAME, exchange=UNROUTABLE_EXCHANGE_NAME, routing_key='')
 
         logger.info('Unrouteable exchange and queue declared')
@@ -157,10 +160,10 @@ class AsyncConnection:
         exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
         declared_exchange = await channel.declare_exchange(
-            name=f'{exchange.name}.{exchange.version}',
+            name=exchange.name_with_version,
             **exchange.as_dict(exclude_none=True, exclude=['version', 'name']),
         )
-        logger.info(f'Exchange {exchange.name} declared')
+        logger.info(f'Exchange {exchange.name_with_version} declared')
 
         return declared_exchange
 
@@ -178,7 +181,10 @@ class AsyncConnection:
 
     async def _declare_unroutable(self, channel: AbstractRobustChannel):
         exchange = await channel.declare_exchange(UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
-        queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
+
+        arguments = {'x-queue-type': 'quorum', 'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME}
+        queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True, arguments=arguments)
+
         await queue.bind(exchange=exchange, routing_key='')
 
         logger.info('Unrouteable exchange and queue declared')

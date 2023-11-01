@@ -59,7 +59,7 @@ class Consumer(Connection):
 
             if exchange := event.exchange:
                 self.declare_exchange(channel, exchange)
-                channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=routing_key)
+                channel.queue_bind(queue=queue_name, exchange=exchange.name_with_version, routing_key=routing_key)
 
             channel.basic_consume(queue_name, event.handler)
             logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {routing_key}')
@@ -111,6 +111,7 @@ class AsyncConsumer(AsyncConnection):
 
             if _exchange := event.exchange:
                 exchange = await self.declare_exchange(channel, _exchange)
+
                 await queue.bind(exchange=exchange, routing_key=routing_key)
 
             await queue.consume(event.handler)

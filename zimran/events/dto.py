@@ -34,6 +34,13 @@ class Exchange(Base):
         if self.arguments is None:
             self.arguments = {}
 
+    @property
+    def name_with_version(self):
+        if self.version:
+            return f'{self.name}.{self.version}'
+
+        return self.name
+
 
 @dataclass(kw_only=True)
 class ChannelProperties(Base):
