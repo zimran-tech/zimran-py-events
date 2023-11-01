@@ -152,7 +152,10 @@ class AsyncConnection:
     async def declare_exchange(self, channel: AbstractRobustChannel, exchange: Exchange):
         exchange.arguments.setdefault('x-alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
-        declared_exchange = await channel.declare_exchange(**exchange.as_dict(exclude_none=True, exclude=['version']))
+        declared_exchange = await channel.declare_exchange(
+            name=f'{exchange.name}.{exchange.version}',
+            **exchange.as_dict(exclude_none=True, exclude=['version', 'name']),
+        )
         logger.info(f'Exchange {exchange.name} declared')
 
         return declared_exchange
