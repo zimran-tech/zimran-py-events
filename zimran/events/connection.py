@@ -13,7 +13,7 @@ from .constants import (
     UNROUTABLE_EXCHANGE_NAME,
     UNROUTABLE_QUEUE_NAME,
 )
-from .dto import Exchange
+from .dto import Exchange, Queue
 from .utils import retry_policy
 
 
@@ -75,24 +75,32 @@ class Connection:
         arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
         channel.exchange_declare(
-            exchange=exchange.name_with_version,
+            exchange=exchange.name,
             exchange_type=exchange.type,
             arguments=arguments,
             **exchange.as_dict(exclude_none=True, exclude=['arguments', 'name', 'type', 'timeout', 'version']),
         )
 
-        logger.info(f'Exchange {exchange.name_with_version} declared')
+        logger.info(f'Exchange {exchange.name} declared')
 
-    def declare_queue(self, channel: BlockingChannel, *, name: str, **kwargs):
-        arguments: dict = kwargs.pop('arguments', {})
-        arguments.setdefault('x-queue-type', kwargs.pop('queue_type', 'quorum'))
+    def declare_queue(self, channel: BlockingChannel, *, name: str, queue: Queue | None = None):
+        if queue is None:
+            queue = Queue()
+
+        arguments: dict = queue.arguments
         arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
 
-        kwargs.setdefault('durable', True)
-        channel.queue_declare(queue=name, arguments=arguments, **kwargs)
+        channel.queue_declare(
+            queue=name,
+            passive=queue.passive,
+            durable=queue.durable,
+            exclusive=queue.exclusive,
+            auto_delete=queue.auto_delete,
+            arguments=arguments,
+        )
         logger.info(f'Queue {name} declared')
 
-    def _declare_unroutable(self, channel: BlockingChannel):
+    def _declare_default_unroutable(self, channel: BlockingChannel):
         channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
 
         arguments = {'x-queue-type': 'quorum', 'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME}
@@ -102,7 +110,7 @@ class Connection:
 
         logger.info('Unrouteable exchange and queue declared')
 
-    def _declare_dead_letter(self, channel: BlockingChannel):
+    def _declare_default_dead_letter(self, channel: BlockingChannel):
         channel.exchange_declare(exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, exchange_type='fanout', durable=True)
         channel.queue_declare(queue=DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
         channel.queue_bind(queue=DEAD_LETTER_QUEUE_NAME, exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, routing_key='')
@@ -110,8 +118,8 @@ class Connection:
         logger.info('Dead letter exchange and queue declared')
 
     def _run_routines(self, channel: BlockingChannel):
-        self._declare_unroutable(channel)
-        self._declare_dead_letter(channel)
+        self._declare_default_unroutable(channel)
+        self._declare_default_dead_letter(channel)
 
 
 class AsyncConnection:
@@ -165,28 +173,37 @@ class AsyncConnection:
         arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
         declared_exchange = await channel.declare_exchange(
-            name=exchange.name_with_version,
+            name=exchange.name,
             arguments=arguments,
             **exchange.as_dict(exclude_none=True, exclude=['arguments', 'name', 'version']),
         )
 
-        logger.info(f'Exchange {exchange.name_with_version} declared')
+        logger.info(f'Exchange {exchange.name} declared')
 
         return declared_exchange
 
-    async def declare_queue(self, channel: AbstractRobustChannel, *, name: str, **kwargs):
-        arguments: dict = kwargs.pop('arguments', {})
-        arguments.setdefault('x-queue-type', kwargs.pop('queue_type', 'quorum'))
+    async def declare_queue(self, channel: AbstractRobustChannel, *, name: str, queue: Queue | None = None):
+        if queue is None:
+            queue = Queue()
+
+        arguments: dict = queue.arguments
         arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
 
-        kwargs.setdefault('durable', True)
-
-        declared_queue = await channel.declare_queue(name, arguments=arguments, **kwargs)
+        declared_queue = await channel.declare_queue(
+            name,
+            durable=queue.durable,
+            exclusive=queue.exclusive,
+            passive=queue.passive,
+            auto_delete=queue.auto_delete,
+            arguments=arguments,
+            timeout=queue.timeout,
+            robust=queue.robust,
+        )
         logger.info(f'Queue {name} declared')
 
         return declared_queue
 
-    async def _declare_unroutable(self, channel: AbstractRobustChannel):
+    async def _declare_default_unroutable(self, channel: AbstractRobustChannel):
         exchange = await channel.declare_exchange(UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
 
         arguments = {'x-queue-type': 'quorum', 'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME}
@@ -196,7 +213,7 @@ class AsyncConnection:
 
         logger.info('Unrouteable exchange and queue declared')
 
-    async def _declare_dead_letter(self, channel: AbstractRobustChannel):
+    async def _declare_default_dead_letter(self, channel: AbstractRobustChannel):
         exchange = await channel.declare_exchange(DEFAULT_DEAD_LETTER_EXCHANGE_NAME, type='fanout', durable=True)
         queue = await channel.declare_queue(DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
         await queue.bind(exchange=exchange, routing_key='')
@@ -205,7 +222,7 @@ class AsyncConnection:
 
     async def _run_routines(self, channel: AbstractRobustChannel):
         await asyncio.gather(
-            self._declare_unroutable(channel),
-            self._declare_dead_letter(channel),
+            self._declare_default_unroutable(channel),
+            self._declare_default_dead_letter(channel),
             return_exceptions=True,
         )
