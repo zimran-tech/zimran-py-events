@@ -3,7 +3,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Literal
 
-from .exceptions import ExchangeTypeError
+from .exceptions import ExchangeTypeError, QueueTypeError
 
 
 class Base:
@@ -34,12 +34,23 @@ class Exchange(Base):
         if self.arguments is None:
             self.arguments = {}
 
-    @property
-    def name_with_version(self):
-        if self.version:
-            return f'{self.name}.{self.version}'
 
-        return self.name
+@dataclass(kw_only=True)
+class Queue(Base):
+    type: Literal['quorum', 'classic'] = 'quorum'  # noqa: A003
+    durable: bool = True
+    exclusive: bool = False
+    passive: bool = False
+    auto_delete: bool = False
+    arguments: dict | None = None
+    timeout: float | int | None = None
+    robust: bool = True
+
+    def __post_init__(self):
+        if self.arguments is None:
+            self.arguments = {
+                'x-queue-type': self.type,
+            }
 
 
 @dataclass(kw_only=True)
@@ -73,13 +84,13 @@ class EventHandler(Base):
     :param handler: Callable that will be called when event received.
     """
 
-    exchange: Exchange | None = None
     handler: callable
-    queue_type: Literal['quorum', 'classic'] = 'quorum'
+    exchange: Exchange | None = None
+    queue: Queue | None = None
 
     def __post_init__(self):
         if self.exchange is not None and not isinstance(self.exchange, Exchange):
             raise ExchangeTypeError('ExchangeTypeError: <exchange> must be instance of <zimran.events.dto.Exchange>')
 
-        if self.queue_type not in ('quorum', 'classic'):
-            raise ValueError('Invalid queue type: <queue_type> must be "quorum" or "classic" but not {self.queue_type}')
+        if self.queue is not None and not isinstance(self.queue, Queue):
+            raise QueueTypeError('QueueTypeError: <queue> must be instance of <zimran.events.dto.Queue>')

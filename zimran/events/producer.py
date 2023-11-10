@@ -51,14 +51,9 @@ class Producer(Connection):
 
         self.declare_exchange(channel=channel, exchange=exchange)
 
-        channel.basic_publish(
-            exchange=exchange.name_with_version,
-            routing_key=routing_key,
-            body=body,
-            properties=basic_properties,
-        )
+        channel.basic_publish(exchange=exchange.name, routing_key=routing_key, body=body, properties=basic_properties)
 
-        logger.info(f'Message published to {exchange.name_with_version} exchange | routing_key: {routing_key}')
+        logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
 
 
 class AsyncProducer(AsyncConnection):
@@ -93,7 +88,7 @@ class AsyncProducer(AsyncConnection):
 
         await declared_exchange.publish(message=message, routing_key=routing_key)
 
-        logger.info(f'Message published to {exchange.name_with_version} exchange | routing_key: {routing_key}')
+        logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
 
     @staticmethod
     def _get_message(properties: ChannelProperties, payload: dict):
