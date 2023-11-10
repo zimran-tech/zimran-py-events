@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-import aio_pika
+from aio_pika.abc import AbstractRobustChannel
 from pika.adapters.blocking_connection import BlockingChannel
 
 
@@ -13,10 +13,9 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 
-from zimran.events.connection import AsyncConnection, Connection
-from zimran.events.constants import DEFAULT_DEAD_LETTER_EXCHANGE_NAME
-from zimran.events.router import Router
-from zimran.events.utils import cleanup_and_normalize_queue_name
+from .connection import AsyncConnection, Connection
+from .router import Router
+from .utils import cleanup_and_normalize_queue_name
 
 
 class Consumer(Connection):
@@ -53,35 +52,19 @@ class Consumer(Connection):
     def _run(self):
         channel: BlockingChannel = self.get_channel()
         channel.basic_qos(prefetch_count=self._prefetch_count)
-        self._run_routines(channel)
 
         for routing_key, event in self._router.handlers.items():
             queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
-            channel.queue_declare(
-                queue_name,
-                durable=True,
-                arguments={
-                    'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
-                    'x-queue-type': event.queue_type,
-                },
-            )
+            self.declare_queue(channel, name=queue_name, queue=event.queue)
 
             if exchange := event.exchange:
-                channel.exchange_declare(
-                    exchange=exchange.name,
-                    exchange_type=exchange.type,
-                    **exchange.as_dict(exclude=['name', 'type', 'timeout']),
-                )
+                self.declare_exchange(channel, exchange)
                 channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=routing_key)
 
             channel.basic_consume(queue_name, event.handler)
             logger.info(f'Registering consumer | queue: {queue_name} | routing_key: {routing_key}')
 
         channel.start_consuming()
-
-    def _run_routines(self, channel: BlockingChannel):
-        self._declare_unroutable(channel)
-        self._declare_dead_letter(channel)
 
 
 class AsyncConsumer(AsyncConnection):
@@ -119,23 +102,16 @@ class AsyncConsumer(AsyncConnection):
                     break
 
     async def _run(self):
-        channel = await self.get_channel()
+        channel: AbstractRobustChannel = await self.get_channel()
         await channel.set_qos(prefetch_count=self._prefetch_count)
-        await self._run_routines(channel)
 
         for routing_key, event in self._router.handlers.items():
             queue_name = cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
-            queue = await channel.declare_queue(
-                queue_name,
-                durable=True,
-                arguments={
-                    'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
-                    'x-queue-type': event.queue_type,
-                },
-            )
+            queue = await self.declare_queue(channel, name=queue_name, queue=event.queue)
 
             if _exchange := event.exchange:
-                exchange = await channel.declare_exchange(**_exchange.as_dict(exclude_none=True))
+                exchange = await self.declare_exchange(channel, _exchange)
+
                 await queue.bind(exchange=exchange, routing_key=routing_key)
 
             await queue.consume(event.handler)
@@ -146,10 +122,3 @@ class AsyncConsumer(AsyncConnection):
         except asyncio.CancelledError as error:
             logger.error('Consumer cancelled')
             raise error
-
-    async def _run_routines(self, channel: aio_pika.Channel):
-        await asyncio.gather(
-            self._declare_unroutable(channel),
-            self._declare_dead_letter(channel),
-            return_exceptions=True,
-        )

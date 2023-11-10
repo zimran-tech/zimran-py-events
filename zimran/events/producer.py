@@ -36,7 +36,10 @@ class Producer(Connection):
             validate_channel_properties(properties)
 
         basic_properties = pika.BasicProperties(**properties.as_dict(exclude_none=True))
-        body = json.dumps(payload, default=str)
+        if isinstance(payload, dict):
+            body = json.dumps(payload, default=str)
+        else:
+            body = payload
 
         channel = self.get_channel()
         if exchange is None:
@@ -46,18 +49,10 @@ class Producer(Connection):
 
         validate_exchange(exchange)
 
-        channel.exchange_declare(
-            exchange=exchange.name,
-            exchange_type=exchange.type,
-            **exchange.as_dict(exclude=['name', 'type', 'timeout'], exclude_none=True),
-        )
+        self.declare_exchange(channel=channel, exchange=exchange)
 
-        channel.basic_publish(
-            exchange=exchange.name,
-            routing_key=routing_key,
-            body=body,
-            properties=basic_properties,
-        )
+        channel.basic_publish(exchange=exchange.name, routing_key=routing_key, body=body, properties=basic_properties)
+
         logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
 
 
@@ -89,11 +84,17 @@ class AsyncProducer(AsyncConnection):
 
         validate_exchange(exchange)
 
-        declared_exchange = await channel.declare_exchange(**exchange.as_dict(exclude_none=True))
+        declared_exchange = await self.declare_exchange(channel, exchange)
+
         await declared_exchange.publish(message=message, routing_key=routing_key)
 
         logger.info(f'Message published to {exchange.name} exchange | routing_key: {routing_key}')
 
     @staticmethod
     def _get_message(properties: ChannelProperties, payload: dict):
-        return aio_pika.Message(body=json.dumps(payload, default=str).encode(), **properties.as_dict(exclude_none=True))
+        if isinstance(payload, dict):
+            body = json.dumps(payload, default=str)
+        else:
+            body = payload
+
+        return aio_pika.Message(body=body.encode(), **properties.as_dict(exclude_none=True))

@@ -1,15 +1,20 @@
-import aio_pika
+import asyncio
+import copy
+
 import pika
+from aio_pika import connect_robust
+from aio_pika.abc import AbstractRobustChannel, AbstractRobustConnection
 from aioretry import retry
 from pika.adapters.blocking_connection import BlockingChannel, BlockingConnection
 
-from zimran.events.constants import (
+from .constants import (
     DEAD_LETTER_QUEUE_NAME,
     DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
     UNROUTABLE_EXCHANGE_NAME,
     UNROUTABLE_QUEUE_NAME,
 )
-from zimran.events.utils import retry_policy
+from .dto import Exchange, Queue
+from .utils import retry_policy
 
 
 try:
@@ -52,7 +57,9 @@ class Connection:
 
     def connect(self):
         self._channel = self.connection.channel(channel_number=self._channel_number)
-        logger.info('Channel connection established')
+        logger.info('Connection established')
+
+        self._run_routines(self._channel)
 
     def disconnect(self):
         if self._channel is not None and self._channel.is_open:
@@ -63,15 +70,56 @@ class Connection:
 
         logger.info('AMQP Connection disconnected')
 
-    def _declare_unroutable(self, channel: BlockingChannel):
+    def declare_exchange(self, channel: BlockingChannel, exchange: Exchange):
+        arguments = copy.deepcopy(exchange.arguments)
+        arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
+
+        channel.exchange_declare(
+            exchange=exchange.name,
+            exchange_type=exchange.type,
+            arguments=arguments,
+            **exchange.as_dict(exclude_none=True, exclude=['arguments', 'name', 'type', 'timeout', 'version']),
+        )
+
+        logger.info(f'Exchange {exchange.name} declared')
+
+    def declare_queue(self, channel: BlockingChannel, *, name: str, queue: Queue | None = None):
+        if queue is None:
+            queue = Queue()
+
+        arguments: dict = queue.arguments
+        arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
+
+        channel.queue_declare(
+            queue=name,
+            passive=queue.passive,
+            durable=queue.durable,
+            exclusive=queue.exclusive,
+            auto_delete=queue.auto_delete,
+            arguments=arguments,
+        )
+        logger.info(f'Queue {name} declared')
+
+    def _declare_default_unroutable(self, channel: BlockingChannel):
         channel.exchange_declare(exchange=UNROUTABLE_EXCHANGE_NAME, exchange_type='fanout', durable=True)
-        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True)
+
+        arguments = {'x-queue-type': 'quorum', 'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME}
+        channel.queue_declare(queue=UNROUTABLE_QUEUE_NAME, durable=True, arguments=arguments)
+
         channel.queue_bind(queue=UNROUTABLE_QUEUE_NAME, exchange=UNROUTABLE_EXCHANGE_NAME, routing_key='')
 
-    def _declare_dead_letter(self, channel: BlockingChannel):
+        logger.info('Unrouteable exchange and queue declared')
+
+    def _declare_default_dead_letter(self, channel: BlockingChannel):
         channel.exchange_declare(exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, exchange_type='fanout', durable=True)
-        channel.queue_declare(queue=DEAD_LETTER_QUEUE_NAME, durable=True)
+        channel.queue_declare(queue=DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
         channel.queue_bind(queue=DEAD_LETTER_QUEUE_NAME, exchange=DEFAULT_DEAD_LETTER_EXCHANGE_NAME, routing_key='')
+
+        logger.info('Dead letter exchange and queue declared')
+
+    def _run_routines(self, channel: BlockingChannel):
+        self._declare_default_unroutable(channel)
+        self._declare_default_dead_letter(channel)
 
 
 class AsyncConnection:
@@ -90,14 +138,14 @@ class AsyncConnection:
         await self.disconnect()
 
     @property
-    async def connection(self) -> aio_pika.abc.AbstractRobustConnection:
+    async def connection(self) -> AbstractRobustConnection:
         if self._connection is None or self._connection.is_closed:
-            self._connection = await aio_pika.connect_robust(url=self._url)
+            self._connection = await connect_robust(url=self._url)
             logger.info('AMQP connection established')
 
         return self._connection
 
-    async def get_channel(self):
+    async def get_channel(self) -> AbstractRobustChannel:
         if self._channel is None or self._channel.is_closed:
             self._channel = await (await self.connection).channel(channel_number=self._channel_number)
             logger.info('Channel connection established')
@@ -107,7 +155,9 @@ class AsyncConnection:
     @retry(retry_policy)
     async def connect(self):
         self._channel = await (await self.connection).channel(channel_number=self._channel_number)
-        logger.info('Channel connection established')
+        logger.info('Connection established')
+
+        await self._run_routines(self._channel)
 
     async def disconnect(self):
         if self._channel is not None and not self._channel.is_closed:
@@ -118,16 +168,61 @@ class AsyncConnection:
 
         logger.info('AMQP Connection disconnected')
 
-    async def _declare_unroutable(self, channel: aio_pika.abc.AbstractRobustChannel):
+    async def declare_exchange(self, channel: AbstractRobustChannel, exchange: Exchange):
+        arguments = copy.deepcopy(exchange.arguments)
+        arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
+
+        declared_exchange = await channel.declare_exchange(
+            name=exchange.name,
+            arguments=arguments,
+            **exchange.as_dict(exclude_none=True, exclude=['arguments', 'name', 'version']),
+        )
+
+        logger.info(f'Exchange {exchange.name} declared')
+
+        return declared_exchange
+
+    async def declare_queue(self, channel: AbstractRobustChannel, *, name: str, queue: Queue | None = None):
+        if queue is None:
+            queue = Queue()
+
+        arguments: dict = queue.arguments
+        arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
+
+        declared_queue = await channel.declare_queue(
+            name,
+            durable=queue.durable,
+            exclusive=queue.exclusive,
+            passive=queue.passive,
+            auto_delete=queue.auto_delete,
+            arguments=arguments,
+            timeout=queue.timeout,
+            robust=queue.robust,
+        )
+        logger.info(f'Queue {name} declared')
+
+        return declared_queue
+
+    async def _declare_default_unroutable(self, channel: AbstractRobustChannel):
         exchange = await channel.declare_exchange(UNROUTABLE_EXCHANGE_NAME, type='fanout', durable=True)
 
-        queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
+        arguments = {'x-queue-type': 'quorum', 'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME}
+        queue = await channel.declare_queue(UNROUTABLE_QUEUE_NAME, durable=True, arguments=arguments)
 
         await queue.bind(exchange=exchange, routing_key='')
 
-    async def _declare_dead_letter(self, channel: aio_pika.abc.AbstractRobustChannel):
+        logger.info('Unrouteable exchange and queue declared')
+
+    async def _declare_default_dead_letter(self, channel: AbstractRobustChannel):
         exchange = await channel.declare_exchange(DEFAULT_DEAD_LETTER_EXCHANGE_NAME, type='fanout', durable=True)
-
         queue = await channel.declare_queue(DEAD_LETTER_QUEUE_NAME, durable=True, arguments={'x-queue-type': 'quorum'})
-
         await queue.bind(exchange=exchange, routing_key='')
+
+        logger.info('Dead letter exchange and queue declared')
+
+    async def _run_routines(self, channel: AbstractRobustChannel):
+        await asyncio.gather(
+            self._declare_default_unroutable(channel),
+            self._declare_default_dead_letter(channel),
+            return_exceptions=True,
+        )
