@@ -88,7 +88,10 @@ class Connection:
             queue = Queue()
 
         arguments: dict = queue.arguments
-        arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
+        if dead_letter_exchange := arguments.get('x-dead-letter-exchange'):
+            self.declare_exchange(channel, Exchange(name=dead_letter_exchange, type='fanout', durable=True))
+        else:
+            arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
 
         channel.queue_declare(
             queue=name,
@@ -187,7 +190,10 @@ class AsyncConnection:
             queue = Queue()
 
         arguments: dict = queue.arguments
-        arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
+        if dead_letter_exchange := arguments.get('x-dead-letter-exchange'):
+            await self.declare_exchange(channel, Exchange(name=dead_letter_exchange, type='fanout', durable=True))
+        else:
+            arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
 
         declared_queue = await channel.declare_queue(
             name,
