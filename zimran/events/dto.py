@@ -46,9 +46,9 @@ class Queue(Base):
 
     def __post_init__(self):
         if self.arguments is None:
-            self.arguments = {
-                'x-queue-type': self.type,
-            }
+            self.arguments = {'x-queue-type': self.type}
+        else:
+            self.arguments.setdefault('x-queue-type', self.type)
 
 
 @dataclass(kw_only=True)
