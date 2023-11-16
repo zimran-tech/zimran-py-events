@@ -28,8 +28,6 @@ class Exchange(Base):
     arguments: dict | None = None
     timeout: float | int | None = None
 
-    version: str = 'v1'
-
     def __post_init__(self):
         if self.arguments is None:
             self.arguments = {}
