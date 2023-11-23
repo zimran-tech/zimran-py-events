@@ -29,6 +29,7 @@ class Producer(Connection):
         payload: dict,
         exchange: Exchange | None = None,
         properties: ChannelProperties | None = None,
+        ignore_unroutable: bool = False,
     ):
         if properties is None:
             properties = ChannelProperties()
@@ -49,7 +50,7 @@ class Producer(Connection):
 
         validate_exchange(exchange)
 
-        self.declare_exchange(channel=channel, exchange=exchange)
+        self.declare_exchange(channel=channel, exchange=exchange, ignore_unroutable=ignore_unroutable)
 
         channel.basic_publish(exchange=exchange.name, routing_key=routing_key, body=body, properties=basic_properties)
 
@@ -68,6 +69,7 @@ class AsyncProducer(AsyncConnection):
         payload: dict,
         exchange: Exchange | None = None,
         properties: ChannelProperties | None = None,
+        ignore_unroutable: bool = False,
     ):
         if properties is None:
             properties = ChannelProperties()
@@ -84,7 +86,7 @@ class AsyncProducer(AsyncConnection):
 
         validate_exchange(exchange)
 
-        declared_exchange = await self.declare_exchange(channel, exchange)
+        declared_exchange = await self.declare_exchange(channel, exchange, ignore_unroutable)
 
         await declared_exchange.publish(message=message, routing_key=routing_key)
 
