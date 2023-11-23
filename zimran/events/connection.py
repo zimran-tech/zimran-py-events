@@ -70,9 +70,10 @@ class Connection:
 
         logger.info('AMQP Connection disconnected')
 
-    def declare_exchange(self, channel: BlockingChannel, exchange: Exchange):
+    def declare_exchange(self, channel: BlockingChannel, exchange: Exchange, ignore_unroutable: bool = False):
         arguments = copy.deepcopy(exchange.arguments)
-        arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
+        if not ignore_unroutable:
+            arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
         channel.exchange_declare(
             exchange=exchange.name,
@@ -90,7 +91,12 @@ class Connection:
         arguments: dict = queue.arguments
         if dead_letter_exchange := arguments.get('x-dead-letter-exchange'):
             queue_name = cleanup_and_normalize_queue_name(dead_letter_exchange)
-            self._declare_dead_letter(channel, exchange_name=dead_letter_exchange, queue_name=queue_name)
+            self._declare_dead_letter(
+                channel,
+                exchange_name=dead_letter_exchange,
+                queue_name=queue_name,
+                queue_arguments=queue.dead_letter_arguments,
+            )
         else:
             arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
 
@@ -114,9 +120,22 @@ class Connection:
 
         logger.info('Unrouteable exchange and queue declared')
 
-    def _declare_dead_letter(self, channel: BlockingChannel, *, exchange_name: str, queue_name: str):
+    def _declare_dead_letter(
+        self,
+        channel: BlockingChannel,
+        *,
+        exchange_name: str,
+        queue_name: str,
+        queue_arguments: dict | None = None,
+    ):
         channel.exchange_declare(exchange=exchange_name, exchange_type='fanout', durable=True)
-        channel.queue_declare(queue=queue_name, durable=True, arguments={'x-queue-type': 'quorum'})
+
+        if queue_arguments:
+            arguments = copy.deepcopy(queue_arguments)
+        else:
+            arguments = {'x-queue-type': 'quorum'}
+
+        channel.queue_declare(queue=queue_name, durable=True, arguments=arguments)
         channel.queue_bind(queue=queue_name, exchange=exchange_name, routing_key='')
 
         logger.info(f'Dead letter exchange "{exchange_name}" and queue "{queue_name}" declared')
@@ -176,9 +195,16 @@ class AsyncConnection:
 
         logger.info('AMQP Connection disconnected')
 
-    async def declare_exchange(self, channel: AbstractRobustChannel, exchange: Exchange):
+    async def declare_exchange(
+        self,
+        channel: AbstractRobustChannel,
+        exchange: Exchange,
+        ignore_unroutable: bool = False,
+    ):
         arguments = copy.deepcopy(exchange.arguments)
-        arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
+
+        if not ignore_unroutable:
+            arguments.setdefault('alternate-exchange', UNROUTABLE_EXCHANGE_NAME)
 
         declared_exchange = await channel.declare_exchange(
             name=exchange.name,
@@ -197,7 +223,12 @@ class AsyncConnection:
         arguments: dict = queue.arguments
         if dead_letter_exchange := arguments.get('x-dead-letter-exchange'):
             queue_name = cleanup_and_normalize_queue_name(dead_letter_exchange)
-            await self._declare_dead_letter(channel, exchange_name=dead_letter_exchange, queue_name=queue_name)
+            await self._declare_dead_letter(
+                channel,
+                exchange_name=dead_letter_exchange,
+                queue_name=queue_name,
+                queue_arguments=queue.dead_letter_arguments,
+            )
         else:
             arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
 
@@ -225,9 +256,21 @@ class AsyncConnection:
 
         logger.info('Unrouteable exchange and queue declared')
 
-    async def _declare_dead_letter(self, channel: AbstractRobustChannel, *, exchange_name: str, queue_name: str):
+    async def _declare_dead_letter(
+        self,
+        channel: AbstractRobustChannel,
+        *,
+        exchange_name: str,
+        queue_name: str,
+        queue_arguments: dict | None = None,
+    ):
         exchange = await channel.declare_exchange(exchange_name, type='fanout', durable=True)
-        queue = await channel.declare_queue(queue_name, durable=True, arguments={'x-queue-type': 'quorum'})
+        if queue_arguments:
+            arguments = copy.deepcopy(queue_arguments)
+        else:
+            arguments = {'x-queue-type': 'quorum'}
+
+        queue = await channel.declare_queue(queue_name, durable=True, arguments=arguments)
         await queue.bind(exchange=exchange, routing_key='')
 
         logger.info(f'Dead letter exchange "{exchange_name}" and queue "{queue_name}" declared')

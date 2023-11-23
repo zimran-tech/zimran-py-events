@@ -24,6 +24,7 @@ class AsyncProducerSingleton:
         exchange_name: str,
         exchange_type: str = 'topic',
         channel_properties: ChannelProperties = None,
+        ignore_unroutable: bool = False,
     ):
         exchange = Exchange(name=exchange_name, type=exchange_type)
         await cls._producer.publish(
@@ -31,6 +32,7 @@ class AsyncProducerSingleton:
             payload=payload,
             exchange=exchange,
             properties=channel_properties,
+            ignore_unroutable=ignore_unroutable,
         )
 
 
@@ -56,6 +58,7 @@ class ProducerSingleton:
         exchange_name: str,
         exchange_type: str = 'topic',
         channel_properties: ChannelProperties = None,
+        ignore_unroutable: bool = False,
     ):
         exchange = Exchange(name=exchange_name, type=exchange_type)
         cls._producer.publish(
@@ -63,4 +66,5 @@ class ProducerSingleton:
             payload=payload,
             exchange=exchange,
             properties=channel_properties,
+            ignore_unroutable=ignore_unroutable,
         )

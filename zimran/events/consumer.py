@@ -58,7 +58,7 @@ class Consumer(Connection):
             self.declare_queue(channel, name=queue_name, queue=event.queue)
 
             if exchange := event.exchange:
-                self.declare_exchange(channel, exchange)
+                self.declare_exchange(channel, exchange, event.ignore_unroutable)
                 channel.queue_bind(queue=queue_name, exchange=exchange.name, routing_key=routing_key)
 
             channel.basic_consume(queue_name, event.handler)
@@ -110,7 +110,7 @@ class AsyncConsumer(AsyncConnection):
             queue = await self.declare_queue(channel, name=queue_name, queue=event.queue)
 
             if _exchange := event.exchange:
-                exchange = await self.declare_exchange(channel, _exchange)
+                exchange = await self.declare_exchange(channel, _exchange, event.ignore_unroutable)
 
                 await queue.bind(exchange=exchange, routing_key=routing_key)
 

@@ -3,6 +3,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Literal
 
+from .constants import DEFAULT_DEAD_LETTER_EXCHANGE_NAME
 from .exceptions import ExchangeTypeError, QueueTypeError
 
 
@@ -44,11 +45,22 @@ class Queue(Base):
     timeout: float | int | None = None
     robust: bool = True
 
+    dead_letter_arguments: dict | None = None
+
     def __post_init__(self):
         if self.arguments is None:
             self.arguments = {'x-queue-type': self.type}
         else:
             self.arguments.setdefault('x-queue-type', self.type)
+
+        if self.dead_letter_arguments is None:
+            self.dead_letter_arguments = {
+                'x-queue-type': 'quorum',
+                'x-dead-letter-exchange': DEFAULT_DEAD_LETTER_EXCHANGE_NAME,
+            }
+        else:
+            self.dead_letter_arguments.setdefault('x-queue-type', 'quorum')
+            self.dead_letter_arguments.setdefault('x-dead-letter-exchange', DEFAULT_DEAD_LETTER_EXCHANGE_NAME)
 
 
 @dataclass(kw_only=True)
@@ -85,6 +97,7 @@ class EventHandler(Base):
     handler: callable
     exchange: Exchange | None = None
     queue: Queue | None = None
+    ignore_unroutable: bool = False
 
     def __post_init__(self):
         if self.exchange is not None and not isinstance(self.exchange, Exchange):
