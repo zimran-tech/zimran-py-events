@@ -2,7 +2,8 @@ import json
 
 import aio_pika
 import pika
-from aioretry import retry
+from aioretry import retry as aio_retry
+from retry import retry
 
 
 try:
@@ -11,7 +12,6 @@ except ImportError:
     import logging
 
     logger = logging.getLogger(__name__)
-
 
 from .connection import AsyncConnection, Connection
 from .dto import ChannelProperties, Exchange
@@ -22,6 +22,7 @@ class Producer(Connection):
     def __init__(self, *, broker_url: str, channel_number: int = 1):
         super().__init__(broker_url=broker_url, channel_number=channel_number)
 
+    @retry(tries=3, delay=1, logger=logger)
     def publish(
         self,
         routing_key: str,
@@ -61,7 +62,7 @@ class AsyncProducer(AsyncConnection):
     def __init__(self, *, broker_url: str, channel_number: int = 1):
         super().__init__(broker_url=broker_url, channel_number=channel_number)
 
-    @retry(retry_policy)
+    @aio_retry(retry_policy)
     async def publish(
         self,
         routing_key: str,

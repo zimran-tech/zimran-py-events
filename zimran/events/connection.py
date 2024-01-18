@@ -4,8 +4,9 @@ import copy
 import pika
 from aio_pika import connect_robust
 from aio_pika.abc import AbstractRobustChannel, AbstractRobustConnection
-from aioretry import retry
+from aioretry import retry as aio_retry
 from pika.adapters.blocking_connection import BlockingChannel, BlockingConnection
+from retry import retry
 
 from .constants import (
     DEAD_LETTER_QUEUE_NAME,
@@ -55,6 +56,7 @@ class Connection:
 
         return self._channel
 
+    @retry(tries=3, delay=1, logger=logger)
     def connect(self):
         self._channel = self.connection.channel(channel_number=self._channel_number)
         logger.info('Connection established')
@@ -179,7 +181,7 @@ class AsyncConnection:
 
         return self._channel
 
-    @retry(retry_policy)
+    @aio_retry(retry_policy)
     async def connect(self):
         self._channel = await (await self.connection).channel(channel_number=self._channel_number)
         logger.info('Connection established')
