@@ -36,6 +36,7 @@ class Exchange(Base):
 
 @dataclass(kw_only=True)
 class Queue(Base):
+    name: str | None = None
     type: Literal['quorum', 'classic'] = 'quorum'  # noqa: A003
     durable: bool = True
     exclusive: bool = False
