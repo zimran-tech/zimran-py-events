@@ -4,14 +4,12 @@ import time
 from aio_pika.abc import AbstractRobustChannel
 from pika.adapters.blocking_connection import BlockingChannel
 
-
 try:
     from loguru import logger
 except ImportError:
     import logging
 
     logger = logging.getLogger(__name__)
-
 
 from .connection import AsyncConnection, Connection
 from .router import Router
@@ -54,7 +52,10 @@ class Consumer(Connection):
         channel.basic_qos(prefetch_count=self._prefetch_count)
 
         for routing_key, event in self._router.handlers.items():
-            queue_name = event.queue.name or cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
+            queue_name = (
+                (event.queue.name if event.queue else None) or
+                cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
+            )
             self.declare_queue(channel, name=queue_name, queue=event.queue)
 
             if exchange := event.exchange:
@@ -106,7 +107,10 @@ class AsyncConsumer(AsyncConnection):
         await channel.set_qos(prefetch_count=self._prefetch_count)
 
         for routing_key, event in self._router.handlers.items():
-            queue_name = event.queue.name or cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
+            queue_name = (
+                (event.queue.name if event.queue else None) or
+                cleanup_and_normalize_queue_name(f'{self._service_name}.{routing_key}')
+            )
             queue = await self.declare_queue(channel, name=queue_name, queue=event.queue)
 
             if _exchange := event.exchange:
