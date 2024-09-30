@@ -90,7 +90,7 @@ class Connection:
 
         arguments: dict = queue.arguments
         if dead_letter_exchange := arguments.get('x-dead-letter-exchange'):
-            queue_name = queue.name or cleanup_and_normalize_queue_name(dead_letter_exchange)
+            queue_name = cleanup_and_normalize_queue_name(dead_letter_exchange)
             self._declare_dead_letter(
                 channel,
                 exchange_name=dead_letter_exchange,
@@ -222,7 +222,7 @@ class AsyncConnection:
 
         arguments: dict = queue.arguments
         if dead_letter_exchange := arguments.get('x-dead-letter-exchange'):
-            queue_name = queue.name or cleanup_and_normalize_queue_name(dead_letter_exchange)
+            queue_name = cleanup_and_normalize_queue_name(dead_letter_exchange)
             await self._declare_dead_letter(
                 channel,
                 exchange_name=dead_letter_exchange,
